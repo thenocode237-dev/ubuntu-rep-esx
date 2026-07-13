@@ -1,0 +1,132 @@
+# =============================================================================
+# server.cfg — GÉNÉRÉ automatiquement à partir de ce template par envsubst
+# (entrypoint.sh). Ne pas éditer server.cfg à la main : modifiez le .env ou
+# ce template. Les ${VAR} sont substituées au démarrage du conteneur.
+# =============================================================================
+
+# --- Endpoints (fixes dans le conteneur ; le mapping hôte est dans compose) ---
+endpoint_add_tcp "0.0.0.0:30120"
+endpoint_add_udp "0.0.0.0:30120"
+
+# --- Identité serveur --------------------------------------------------------
+sv_hostname "${SERVER_NAME}"
+sets sv_projectName "${SERVER_NAME}"
+sets sv_projectDesc "${SERVER_DESCRIPTION}"
+sets tags "${SV_TAGS}"
+# Icône serveur (navigateur FiveM / txAdmin) : PNG 96x96 dans config/server-icon.png
+# (logo Ubuntu RP). Chemin absolu = fiable sous txAdmin (cwd = dossier des artifacts).
+load_server_icon "/opt/fivem/config/server-icon.png"
+
+# --- Capacité & synchronisation ----------------------------------------------
+sv_maxclients ${MAX_CLIENTS}
+onesync ${ONESYNC}
+sv_enforceGameBuild ${GTA_BUILD}
+
+# --- Licence & API -----------------------------------------------------------
+sv_licenseKey "${LICENSE_KEY}"
+set steam_webApiKey "${STEAM_WEBAPI_KEY}"
+
+# --- Base de données (service Docker "mariadb") ------------------------------
+set mysql_connection_string "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mariadb:3306/${MYSQL_DATABASE}?charset=utf8mb4"
+
+# --- Sécurité ----------------------------------------------------------------
+rcon_password "${RCON_PASSWORD}"
+sv_scriptHookAllowed 0
+# Masque l'IP du serveur dans les logs publics
+sv_endpointprivacy true
+
+# --- Couche RP ESX (monorepo esx_core 1.13.x + stack ox) -----------------------
+# Locale des ressources (textes en français). ESX + ox_lib lisent ces convars.
+setr esx:locale "fr"
+setr ox:locale "fr"
+sets locale "fr-FR"
+# Chat système (requis par la recette esx_core).
+set resources_useSystemChat true
+# Webhook Discord pour les logs/notifications de scripts (vide = désactivé).
+set discord_webhook "${DISCORD_WEBHOOK}"
+
+# --- Permissions admin ESX (recette officielle esx_core) -----------------------
+# Le groupe se donne via la colonne `users.group` (Adminer/txAdmin) — cf. GUIDE_ADMIN.md.
+add_ace group.admin command allow
+add_ace group.admin command.quit deny
+add_ace resource.es_extended command.add_ace allow
+add_ace resource.es_extended command.add_principal allow
+add_ace resource.es_extended command.remove_principal allow
+
+# --- Ressources (installées par `make resources` ; nos ressources custom viennent
+# du dépôt via resources/[custom]). esx_identity/esx_menu_* proviennent du monorepo
+# esx_core ; l'apparence est illenium-appearance. `manual_shutdown` = le loadscreen reste
+# affiché jusqu'à ShutdownLoadingScreenNui(), appelé par ubuntu-antichute au spawn
+# (esx:playerLoaded / playerSpawned) — en mono-perso il n'y a plus de multichar.
+loadscreen_manual_shutdown 'yes'
+ensure ubuntu-loadscreen
+
+# --- Ressources système FiveM ---
+ensure chat
+ensure spawnmanager
+ensure hardcap
+
+# --- Base : DB + lib + framework ---
+ensure oxmysql
+ensure ox_lib
+ensure es_extended
+
+# --- Inventaire + ciblage (stack ox ; es_extended détecte ox_inventory) ---
+ensure ox_inventory
+ensure ox_target
+
+# --- Menus / UI ESX (dépendances des ressources esx_*) ---
+ensure esx_menu_default
+ensure esx_menu_dialog
+ensure esx_menu_list
+ensure esx_context
+ensure esx_notify
+ensure esx_textui
+ensure esx_progressbar
+
+# --- Apparence + identité (MONO-PERSONNAGE, auto-chargé) ---
+# fivem-appearance (ESX + ox_lib) remplace esx_skin/skinchanger : il fournit la compat
+# `skinchanger:modelLoaded` que es_extended attend pour finir le spawn, et corrige les
+# pieds/peau invisibles. esx_multicharacter est ABSENT du disque (retiré par
+# install-resources.sh) => Config.Multichar=false => AUTO-CHARGE l'unique personnage
+# (identité au 1er join via esx_identity).
+ensure fivem-appearance
+ensure esx_identity
+# esx_dmvschool / esx_license : à sourcer (dépôt + SQL) avant de décommenter.
+# ensure esx_dmvschool
+# ensure esx_license
+
+# --- Standalone (framework-agnostiques) ---
+ensure PolyZone
+ensure interact-sound
+ensure rpemotes-reborn
+ensure LegacyFuel
+
+# --- Anti-chute au spawn (gèle le joueur tant que la collision n'est pas chargée) ---
+ensure ubuntu-antichute
+
+# --- Ressources maison (gameplay générique) ---
+ensure ubuntu-location
+# Banque (guichets + ATM) : dépôt/retrait/virement via l'API ESX (ox_target requis).
+ensure ubuntu-banque
+# ubuntu-premium (boutique de dons) avant ubuntu-admin (export AddPoints).
+ensure ubuntu-premium
+ensure ubuntu-admin
+ensure ubuntu-interface
+# Braquages + trafic (utilisent ox_inventory ; alerte le job 'police' quand il existe).
+ensure ubuntu-braquages
+ensure ubuntu-drogue
+
+# --- PHASE 2 (métiers ESX police/ambulance/…) — sources à confirmer (les dépôts
+#     esx-framework/esx_* séparés n'existent plus). Ajouter au RESOURCES du script
+#     puis décommenter. Sans eux, braquages/drogue tournent sans alerte police.
+# ensure esx_addonaccount
+# ensure esx_society
+# ensure esx_policejob
+# ensure esx_ambulancejob
+
+# --- PHASE 3 (optionnel, DÉSACTIVÉ) : téléphone (npwd + pma-voice) + housing -----
+# Préparer via le bloc Phase 3 de scripts/install-resources.sh puis décommenter ici.
+# ensure pma-voice
+# ensure npwd
+# ensure loaf_housing

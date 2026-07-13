@@ -1,0 +1,221 @@
+/* =============================================================================
+   Ubuntu RP — écran de chargement
+   Fond = assets/background.jpg + voile sombre pour la lisibilité.
+   Accent : indigo #5B4CF0.
+   ========================================================================== */
+
+:root {
+    --accent: #5B4CF0;
+    --ink:    #F4F6FA;
+    --muted:  rgba(244, 246, 250, 0.72);
+    --panel:  rgba(8, 12, 24, 0.55);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+    color: var(--ink);
+    background: #05070d;
+    user-select: none;
+    cursor: default;
+}
+
+/* --- Fond image + fallback dégradé --------------------------------------- */
+.bg {
+    position: fixed;
+    inset: 0;
+    /* Fallback dégradé (visible si background.jpg absent), puis l'image par-dessus */
+    background:
+        image-set(url("assets/background.jpg")) center / cover no-repeat,
+        radial-gradient(circle at 50% 30%, #17324a 0%, #0a1526 55%, #05070d 100%);
+    background:
+        url("assets/background.jpg") center / cover no-repeat,
+        radial-gradient(circle at 50% 30%, #17324a 0%, #0a1526 55%, #05070d 100%);
+    animation: slow-zoom 40s ease-in-out infinite alternate;
+}
+
+@keyframes slow-zoom {
+    from { transform: scale(1); }
+    to   { transform: scale(1.08); }
+}
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(5,7,13,0.35) 0%, rgba(5,7,13,0.55) 55%, rgba(5,7,13,0.85) 100%);
+}
+
+/* --- Bande drapeau ------------------------------------------------------- */
+.flag-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 5px;
+    display: flex;
+    z-index: 5;
+}
+.flag-bar span { flex: 1; }
+.flag-accent { background: var(--accent); }
+
+/* --- Scène centrale ------------------------------------------------------ */
+.stage {
+    position: relative;
+    z-index: 3;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5vh;
+    padding: 4vh 6vw;
+    text-align: center;
+}
+
+/* --- Logo ---------------------------------------------------------------- */
+.brand { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; }
+
+.logo-img {
+    max-width: 320px;
+    max-height: 22vh;
+    margin-bottom: 0.4rem;
+    filter: drop-shadow(0 8px 24px rgba(0,0,0,0.6));
+}
+
+.logo-text {
+    position: relative;
+    font-size: clamp(3rem, 8vw, 6.5rem);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-shadow: 0 6px 30px rgba(0,0,0,0.7);
+}
+.logo-ubuntu { color: var(--ink); }
+.logo-rp {
+    color: #ffffff;
+    background: var(--accent);
+    padding: 0 0.18em;
+    margin-left: 0.18em;
+    border-radius: 0.12em;
+    box-shadow: 0 6px 20px rgba(91, 76, 240, 0.35);
+}
+.logo-star {
+    position: absolute;
+    top: -0.35em;
+    right: -0.7em;
+    font-size: 0.42em;
+    color: var(--accent);
+    text-shadow: 0 0 18px rgba(91, 76, 240, 0.9);
+    animation: twinkle 2.4s ease-in-out infinite;
+}
+@keyframes twinkle {
+    0%, 100% { opacity: 1;   transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(0.82); }
+}
+
+.tagline {
+    font-size: clamp(0.9rem, 1.8vw, 1.25rem);
+    font-weight: 500;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+/* --- Loader -------------------------------------------------------------- */
+.loader {
+    width: min(560px, 80vw);
+    background: var(--panel);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem 1.3rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.loader-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.7rem;
+    font-size: 0.95rem;
+}
+.status { color: var(--muted); font-weight: 500; }
+.percent { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.bar {
+    width: 100%;
+    height: 10px;
+    background: rgba(255,255,255,0.10);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.bar-fill {
+    width: 0%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #7b6ef5 0%, var(--accent) 50%, #3d2fd0 100%);
+    background-size: 200% 100%;
+    box-shadow: 0 0 16px rgba(91, 76, 240, 0.5);
+    transition: width 0.35s ease;
+    animation: shimmer 2.2s linear infinite;
+}
+@keyframes shimmer {
+    from { background-position: 0% 0; }
+    to   { background-position: 200% 0; }
+}
+
+/* --- Astuces ------------------------------------------------------------- */
+.tip {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    max-width: min(680px, 86vw);
+    font-size: clamp(0.85rem, 1.6vw, 1.05rem);
+}
+.tip-label {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: #ffffff;
+    background: var(--accent);
+    padding: 0.22em 0.6em;
+    border-radius: 6px;
+}
+.tip-text { color: var(--ink); opacity: 0.92; transition: opacity 0.4s ease; }
+.tip-text.fade { opacity: 0; }
+
+/* --- Pied de page -------------------------------------------------------- */
+.foot {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 4;
+    padding: 0.9rem;
+    text-align: center;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    background: linear-gradient(0deg, rgba(5,7,13,0.7), transparent);
+}
+
+/* --- Bouton mute --------------------------------------------------------- */
+.mute-btn {
+    position: fixed;
+    bottom: 18px; right: 18px;
+    z-index: 6;
+    width: 46px; height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.mute-btn:hover { transform: scale(1.08); background: rgba(0,122,94,0.55); }
+.mute-btn.muted { opacity: 0.65; }

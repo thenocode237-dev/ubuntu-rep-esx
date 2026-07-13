@@ -1,0 +1,13 @@
+# Provisioning Grafana (V2) — charge les dashboards JSON du dossier monté.
+apiVersion: 1
+
+providers:
+  - name: Caissia FiveM
+    orgId: 1
+    folder: FiveM
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards

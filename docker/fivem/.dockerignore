@@ -1,0 +1,4 @@
+# Contexte de build minimal : seuls entrypoint.sh + Dockerfile sont nécessaires.
+*
+!Dockerfile
+!entrypoint.sh

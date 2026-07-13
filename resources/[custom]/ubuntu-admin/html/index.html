@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des joueurs</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app" class="hidden">
+        <div class="panel">
+            <aside class="sidebar">
+                <div class="brand"><span class="dot"></span> Ubuntu <span class="accent">Admin</span></div>
+                <button class="nav active" data-view="players">Joueurs</button>
+                <button class="nav" data-view="server">Serveur</button>
+                <div class="sidebar__foot">
+                    <button id="refresh" class="btn-ghost">Rafraîchir</button>
+                    <button id="close" class="btn-ghost">Fermer</button>
+                </div>
+            </aside>
+
+            <main class="content">
+                <!-- Vue joueurs -->
+                <section id="view-players" class="view">
+                    <header class="view__head">
+                        <h2>Joueurs en ligne <span id="count" class="pill">0</span></h2>
+                        <input id="search" class="search" type="text" placeholder="Rechercher (nom, id, citizenid)…">
+                    </header>
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead>
+                                <tr><th>ID</th><th>Nom</th><th>Métier</th><th>Cash</th><th>Banque</th><th>Sale</th><th>Ping</th><th></th></tr>
+                            </thead>
+                            <tbody id="players-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Vue serveur -->
+                <section id="view-server" class="view hidden">
+                    <header class="view__head"><h2>Serveur</h2></header>
+                    <div class="cards">
+                        <div class="scard">
+                            <h3>Annonce globale</h3>
+                            <textarea id="announce-msg" placeholder="Message diffusé à tous les joueurs…"></textarea>
+                            <button class="btn" id="announce-send">Diffuser</button>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Modale d'action -->
+        <div id="modal" class="modal hidden">
+            <div class="modal__box">
+                <h3 id="modal-title">Action</h3>
+                <div id="modal-body"></div>
+                <div class="modal__actions">
+                    <button class="btn-ghost" id="modal-cancel">Annuler</button>
+                    <button class="btn" id="modal-confirm">Confirmer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boutique Premium</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app" class="hidden">
+        <div class="store">
+            <header class="store__header">
+                <div class="store__title">
+                    <h1>Boutique <span class="accent">Premium</span></h1>
+                    <p class="store__subtitle">Cosmétiques &amp; confort — sans avantage de jeu</p>
+                </div>
+                <div class="store__balance">
+                    <span class="balance__label">Solde</span>
+                    <span class="balance__value"><span id="balance">0</span> <span class="balance__unit" id="currency">Points</span></span>
+                    <button id="close" class="btn-close" title="Fermer (Échap)">&times;</button>
+                </div>
+            </header>
+
+            <nav class="tabs" id="tabs"></nav>
+
+            <main class="grid" id="grid"></main>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

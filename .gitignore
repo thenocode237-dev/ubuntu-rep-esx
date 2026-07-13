@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────
+# Ubuntu RP — .gitignore
+# ─────────────────────────────────────────────────────────────
+
+# ── Secrets & configuration locale ──────────────────────────
+# (clés de licence Cfx.re, mots de passe DB, webhooks Discord…)
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+secrets/
+
+# ── Config générée / sauvegardes ────────────────────────────
+# server.cfg est généré depuis le template par l'entrypoint.
+config/server.cfg
+# Sauvegardes ad hoc (server.cfg.bkp contenait la clé de licence !)
+*.bkp
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
+# ── État runtime & données persistantes ─────────────────────
+/data/*
+!/data/.gitkeep
+# Clones officiels + artifacts FXServer (remplis par make resources)
+/data/resources/
+/data/artifacts/
+
+# ── Certificats TLS Nginx (profil proxy V2) ─────────────────
+config/nginx/certs/
+
+# ── Backups générés (make backup) ───────────────────────────
+/backups/
+*.tar.gz
+*.sql.gz
+*.dump
+
+# ── Logs ────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS / éditeurs ───────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Divers ──────────────────────────────────────────────────
+tmp/
+*.tmp

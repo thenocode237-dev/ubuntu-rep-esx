@@ -1,0 +1,99 @@
+name: CI/CD
+
+# Pipeline SPECS §12 : lint/tests -> build image -> publication registre -> déploiement VPS.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ${{ github.repository }}/fivem
+  REGISTRY: ghcr.io
+
+jobs:
+  # --- 1. Lint & validation ---------------------------------------------------
+  lint:
+    name: Lint & validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint des scripts shell (shellcheck)
+        run: shellcheck docker/fivem/entrypoint.sh scripts/*.sh
+
+      - name: Lint du Dockerfile (hadolint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/fivem/Dockerfile
+          failure-threshold: warning
+
+      - name: Validation docker-compose
+        run: |
+          cp .env.example .env
+          docker compose config >/dev/null
+          docker compose --profile proxy --profile monitoring config >/dev/null
+
+  # --- 2. Build & publication de l'image -------------------------------------
+  build:
+    name: Build & push image
+    runs-on: ubuntu-latest
+    needs: lint
+    # Ne publie que sur push vers la branche par défaut (pas sur les PR).
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Métadonnées (tags)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/fivem
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # --- 3. Déploiement VPS (facultatif, sur secrets présents) -----------------
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Déploiement SSH
+        # Requiert les secrets DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY / DEPLOY_PATH.
+        # L'étape est ignorée proprement si le hôte n'est pas configuré.
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        if: env.DEPLOY_HOST != ''
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+            git pull --ff-only
+            docker compose pull
+            docker compose up -d --remove-orphans

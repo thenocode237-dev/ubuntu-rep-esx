@@ -1,0 +1,188 @@
+services:
+  mariadb:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MYSQL_DATABASE}
+      MARIADB_USER: ${MYSQL_USER}
+      MARIADB_PASSWORD: ${MYSQL_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - ./data/database:/var/lib/mysql
+    networks:
+      - fivem-net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ./data/cache:/data
+    networks:
+      - fivem-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: mariadb
+      TZ: ${TZ}
+    depends_on:
+      - mariadb
+    networks:
+      - fivem-net
+
+  fivem:
+    build: ./docker/fivem
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${FIVEM_PORT}:30120/tcp"
+      - "${FIVEM_PORT}:30120/udp"
+      - "${TXADMIN_PORT}:40120/tcp"
+    volumes:
+      - ./data/resources:/opt/fivem/resources
+      # Ressources custom versionnées dans le dépôt (bind imbriqué volontaire).
+      - ./resources:/opt/fivem/resources/[ubuntu]
+      - ./data/txData:/opt/fivem/txData
+      - ./data/artifacts:/opt/fivem/artifacts
+      - ./data/logs:/opt/fivem/logs
+      - ./config:/opt/fivem/config
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fivem-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:40120/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # ===========================================================================
+  # V2 — Reverse proxy (profil "proxy")
+  # ===========================================================================
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: ["proxy"]
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./config/nginx:/etc/nginx/conf.d:ro
+    depends_on:
+      - fivem
+    networks:
+      - fivem-net
+
+  # ===========================================================================
+  # V2 — Monitoring (profil "monitoring")
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/monitoring/prometheus:/prometheus
+    networks:
+      - fivem-net
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - fivem-net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - fivem-net
+
+  loki:
+    image: grafana/loki:3.1.1
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - ./data/monitoring/loki:/loki
+    networks:
+      - fivem-net
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - ./data/logs:/var/log/fivem:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    networks:
+      - fivem-net
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      TZ: ${TZ}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./data/monitoring/grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - fivem-net
+
+networks:
+  fivem-net:
+    driver: bridge

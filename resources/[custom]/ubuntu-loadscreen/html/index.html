@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ubuntu RP — Chargement</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Calque de fond (image assets/background.jpg via CSS) + voile sombre -->
+    <div class="bg"></div>
+    <div class="overlay"></div>
+
+    <!-- Bande d'accent en haut -->
+    <div class="flag-bar">
+        <span class="flag-accent"></span>
+    </div>
+
+    <main class="stage">
+        <!-- Logo : texte stylé par défaut ; un logo.png remplacera le texte s'il est présent -->
+        <div class="brand">
+            <img id="logo-img" class="logo-img" src="assets/logo.png" alt="UBUNTU RP"
+                 onload="var t=document.getElementById('logo-text'); if(t){t.style.display='none';}"
+                 onerror="this.style.display='none';">
+            <h1 id="logo-text" class="logo-text">
+                <span class="logo-ubuntu">UBUNTU</span><span class="logo-rp">RP</span>
+                <span class="logo-star">★</span>
+            </h1>
+            <p class="tagline">Serveur Roleplay</p>
+        </div>
+
+        <!-- Barre de progression -->
+        <div class="loader">
+            <div class="loader-head">
+                <span id="status" class="status">Initialisation…</span>
+                <span id="percent" class="percent">0&nbsp;%</span>
+            </div>
+            <div class="bar">
+                <div id="bar-fill" class="bar-fill"></div>
+            </div>
+        </div>
+
+        <!-- Astuces RP rotatives -->
+        <div class="tip">
+            <span class="tip-label">ASTUCE</span>
+            <span id="tip-text" class="tip-text"></span>
+        </div>
+    </main>
+
+    <!-- Pied de page -->
+    <footer class="foot">
+        <span>Serveur Roleplay • ESX</span>
+    </footer>
+
+    <!-- Bouton mute musique -->
+    <button id="mute-btn" class="mute-btn" title="Couper / activer la musique" aria-label="Couper la musique">
+        <span id="mute-icon">🔊</span>
+    </button>
+
+    <!-- Musique d'attente -->
+    <audio id="bgm" loop preload="auto">
+        <source src="assets/music.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="app.js"></script>
+</body>
+</html>
