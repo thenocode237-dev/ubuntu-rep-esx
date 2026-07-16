@@ -136,6 +136,14 @@ depuis fr.lua/en.lua) :
   arme » Accorder/Retirer) : écrit dans la table ESX `user_licenses` (`type='weapon'`, `owner=xPlayer.identifier`,
   `INSERT` idempotent / `DELETE`) → débloque l'achat des armes à feu gatées `license='weapon'` par ox_inventory
   (bridge ESX teste juste l'existence de la ligne). Aucun SQL propre (table `user_licenses` déjà dans `esx-base.sql`).
+  **Réglage de monde (onglet Serveur) — bascules PNJ/trafic (déjà câblé, ne pas re-dériver)** : deux
+  actions globales sans cible `toggleped`/`togglevehicle` (patron de `announce`) posent
+  **`GlobalState.npcPedDisabled`/`npcVehDisabled`** (statebag serveur, répliqué à tous les clients +
+  aux arrivants). Un `CreateThread` client applique les natives de densité (piétons + trafic
+  `SetVehicleDensityMultiplierThisFrame`/parked/random/garbage/boats/trains) à `0` tant que l'état est
+  actif → **coupe les nouveaux spawns** (n'efface pas les entités présentes). Le callback `getPlayers`
+  renvoie l'état courant (`world = {peds, vehicles}`) pour que le panel rouvre avec les boutons à jour.
+  Se réinitialise au redémarrage. Aucun SQL.
 - **`ubuntu-interface`** : menu F1 via `lib.registerContext`, `isStaff` via groupe ESX (`lib.callback`),
   init sur `esx:playerLoaded`, blips **génériques** (sans noms camerounais). **Solde du menu pause
   (déjà câblé, ne pas re-dériver)** : ESX ne synchronise pas les stats natives GTA du menu pause →

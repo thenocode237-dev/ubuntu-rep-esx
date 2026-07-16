@@ -8,6 +8,10 @@ Locales.fr = {
     },
     success = {
         ['announced'] = 'Annonce envoyée',
+        ['ped_off'] = 'PNJ piétons désactivés',
+        ['ped_on'] = 'PNJ piétons activés',
+        ['veh_off'] = 'Trafic PNJ désactivé',
+        ['veh_on'] = 'Trafic PNJ activé',
         ['banned'] = '%{name} a été banni',
         ['money'] = '%{amount} %{type} appliqué à %{name}',
         ['money_target'] = 'Un administrateur a ajusté votre %{type} de %{amount}',

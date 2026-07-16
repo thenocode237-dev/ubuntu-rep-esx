@@ -7,6 +7,23 @@ un versionnage sémantique souple : `MAJEUR.MINEUR.CORRECTIF`.
 
 ---
 
+## [2.10.0] — 2026-07-16 — Panel admin : bascule PNJ piétons / trafic (vider les rues)
+
+- **Nouveau réglage de monde dans `/admin` (onglet Serveur)** : deux boutons staff pour
+  **couper l'apparition** des **PNJ piétons** et du **trafic** (véhicules conduits par des PNJ),
+  indépendamment. Utile pour événements RP, screenshots, scènes fermées.
+- **Global + persistant à la connexion** : l'état est porté par **`GlobalState`** (statebag serveur),
+  répliqué automatiquement à **tous les joueurs** — y compris ceux qui se connectent après la bascule.
+  Un `CreateThread` client applique les natives de densité (`SetPedDensityMultiplierThisFrame`,
+  `SetVehicleDensityMultiplierThisFrame` + parked/random/garbage/boats/trains) à `0` tant que la
+  bascule est active. Se réinitialise au redémarrage du serveur (le staff rebascule si besoin).
+- **Stoppe les spawns seulement** (pas de suppression des entités déjà présentes : elles disparaissent
+  en s'éloignant du joueur). **Serveur-authoritative** : mêmes gardes staff que les autres actions
+  (`isAllowed`/`guard`), log Discord, patron de l'action `announce`. Le panel rouvre avec les boutons
+  reflétant l'état courant (champ `world` ajouté au callback `getPlayers`).
+- Fichiers : `resources/[custom]/ubuntu-admin/{server.lua,client.lua,html/index.html,html/app.js,
+  locales/fr.lua,locales/en.lua}`.
+
 ## [2.9.2] — 2026-07-16 — Nouveau logo officiel Ubuntu RP (partout) + nettoyage loadscreen
 
 - **Nouveau logo** appliqué à **tous** les emplacements depuis une source carrée unique versionnée
@@ -40,10 +57,15 @@ un versionnage sémantique souple : `MAJEUR.MINEUR.CORRECTIF`.
   **mauvais XY** (le cale-sol ne suffit pas) et sont déplacés vers des emplacements accessibles vérifiés :
   - **Mairie** (`ubuntu-mairie`) : `-545.9,-204.9` (pas la vraie mairie) → **Hôtel de ville canonique**
     `-262.79, -964.18, 30.22, 181.71` (emplacement `qb-cityhall`, trottoir devant l'entrée, accessible).
-  - **Grossiste drogue** (`ubuntu-drogue`) : `-598,-1622,33` (Z flottant) → `-586.74, -1601.01, 27.01`
-    (entrepôt bord de rivière, spot `esx_drugs` vérifié, Z au sol).
+  - **Grossiste drogue** (`ubuntu-drogue`) : `-598,-1622,33` puis `-586.74,-1601.01` (tous deux dans
+    un **entrepôt industriel clôturé** El Burro = bloqué) → **rue ouverte de Davis / Grove St**
+    `119.16, -1909.68, 20.93` (spot dealer `esx_drugs` sourcé, accessible, près de la zone de deal est).
   - **Pharmacie publique** (`ox_inventory/data/shops.lua` + `install-resources.sh`) : `-661.32,-854.14`
     → **entrée piétonne hôpital Pillbox** `311.24, -593.52, 43.29` (accessible + thématique).
+  - **Garage aéroport** (`ubuntu-garage`) : `-1037.5,-2737.6` (**dans l'enceinte clôturée** du LSIA,
+    inaccessible à pied) → garage public canonique `qb-garages` `-796.6, -2025.1, 8.9` (hors barrière).
+  - **Braquage « Supérette ouest »** (`ubuntu-braquages`) : `-1487.9,-379.5` (pas de magasin réel) →
+    **24/7 réel de Del Perro** `-1222.9, -907.9, 12.3`.
 - **Note** : un point *à l'intérieur d'un mur* (mauvais XY, pas seulement mauvais Z) ne peut pas être
   détecté à coup sûr sans client GTA — signaler ses coordonnées en jeu pour le relocaliser précisément.
 

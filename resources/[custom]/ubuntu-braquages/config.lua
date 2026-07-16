@@ -41,8 +41,8 @@ Config.Targets = {
       coords = vector3(1163.0, -323.8, 69.2), duration = 18000, cooldown = 1800,
       minPolice = 1, reward = { min = 8000, max = 18000 }, needWeapon = true },
     { id = 'store_west',    type = 'till', label = 'Supérette (ouest)',
-      coords = vector3(-1487.9, -379.5, 40.2), duration = 18000, cooldown = 1800,
-      minPolice = 1, reward = { min = 8000, max = 18000 }, needWeapon = true },
+      coords = vector3(-1222.9, -907.9, 12.3), duration = 18000, cooldown = 1800,
+      minPolice = 1, reward = { min = 8000, max = 18000 }, needWeapon = true }, -- 24/7 Del Perro (réel)
 
     -- Distributeurs (ATM) — discret, petit butin, nécessite un kit électronique.
     { id = 'atm_center',    type = 'atm', label = 'Distributeur (centre)',

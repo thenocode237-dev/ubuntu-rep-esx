@@ -135,15 +135,19 @@ RegisterKeyMapping(Config.MainMenu.command, 'Ouvrir le menu principal', 'keyboar
 
 -- =============================================================================
 -- 4) Roue de sélection d'arme à la molette de la souris.
---    Par défaut GTA fait défiler l'arme directement à la molette (contrôles
---    14/15) et n'ouvre la roue qu'en maintenant TAB (contrôle 37). Ici, un coup
---    de molette ouvre la roue et la garde affichée le temps de choisir : tant
---    que le minuteur court, on maintient le contrôle 37 « enfoncé » (équivaut à
---    garder TAB), et les crans de molette naviguent alors dans la roue.
+--    Piège des contrôles GTA : quand la roue est FERMÉE, un cran de molette
+--    déclenche 16/17 (INPUT_SELECT_NEXT/PREV_WEAPON = switch instantané), et
+--    NON 14/15 (ceux-là ne servent qu'à naviguer dans une roue déjà ouverte).
+--    On bloque donc le switch instantané (16/17) et, à sa place, on ouvre la
+--    roue en maintenant le contrôle 37 (INPUT_SELECT_WEAPON, équivaut à TAB)
+--    pendant `openMs`. Chaque nouveau cran (16/17 fermé, 14/15 ouvert) relance
+--    le minuteur ; quand on arrête de scroller, la roue se ferme et sélectionne.
 -- =============================================================================
-local INPUT_SELECT_WEAPON     = 37  -- ouvre / maintient la roue
-local INPUT_WEAPON_WHEEL_NEXT = 14  -- molette bas
-local INPUT_WEAPON_WHEEL_PREV = 15  -- molette haut
+local INPUT_SELECT_WEAPON      = 37  -- ouvre / maintient la roue (TAB)
+local INPUT_SELECT_NEXT_WEAPON = 16  -- molette (roue fermée) → switch instantané
+local INPUT_SELECT_PREV_WEAPON = 17
+local INPUT_WEAPON_WHEEL_NEXT  = 14  -- molette pendant que la roue est ouverte
+local INPUT_WEAPON_WHEEL_PREV  = 15
 
 CreateThread(function()
     if not Config.WeaponWheel or not Config.WeaponWheel.enabled then return end
@@ -151,10 +155,17 @@ CreateThread(function()
     local holdUntil = 0
     while true do
         Wait(0)
-        if IsControlJustPressed(0, INPUT_WEAPON_WHEEL_NEXT)
+        -- Neutralise le switch instantané pour que la molette ouvre la roue.
+        DisableControlAction(0, INPUT_SELECT_NEXT_WEAPON, true)
+        DisableControlAction(0, INPUT_SELECT_PREV_WEAPON, true)
+
+        if IsDisabledControlJustPressed(0, INPUT_SELECT_NEXT_WEAPON)
+            or IsDisabledControlJustPressed(0, INPUT_SELECT_PREV_WEAPON)
+            or IsControlJustPressed(0, INPUT_WEAPON_WHEEL_NEXT)
             or IsControlJustPressed(0, INPUT_WEAPON_WHEEL_PREV) then
             holdUntil = GetGameTimer() + openMs
         end
+
         if GetGameTimer() < holdUntil then
             SetControlNormal(0, INPUT_SELECT_WEAPON, 1.0)
         end

@@ -12,6 +12,7 @@
     let players = [];
     let jobs = {};
     let moneyTypes = ['money', 'bank', 'black_money'];
+    let world = { peds: false, vehicles: false };
 
     function post(name, data) {
         return fetch(`https://${resourceName}/${name}`, {
@@ -66,6 +67,20 @@
             });
             body.appendChild(tr);
         });
+    }
+
+    // --- Contrôles monde (PNJ / trafic) ------------------------------------
+    function renderWorld() {
+        const ped = document.getElementById('toggle-ped');
+        const veh = document.getElementById('toggle-veh');
+        if (ped) {
+            ped.textContent = 'PNJ piétons : ' + (world.peds ? 'OFF' : 'ON');
+            ped.classList.toggle('danger', world.peds);
+        }
+        if (veh) {
+            veh.textContent = 'Trafic (véhicules PNJ) : ' + (world.vehicles ? 'OFF' : 'ON');
+            veh.classList.toggle('danger', world.vehicles);
+        }
     }
 
     // --- Actions (directes ou via modale) ----------------------------------
@@ -164,10 +179,20 @@
         const msg = document.getElementById('announce-msg').value.trim();
         if (msg) { sendAction('announce', null, { message: msg }); document.getElementById('announce-msg').value = ''; }
     };
+    document.getElementById('toggle-ped').onclick = () => {
+        world.peds = !world.peds; sendAction('toggleped', null, { state: world.peds }); renderWorld();
+    };
+    document.getElementById('toggle-veh').onclick = () => {
+        world.vehicles = !world.vehicles; sendAction('togglevehicle', null, { state: world.vehicles }); renderWorld();
+    };
 
     function refresh() {
         post('refresh').then((res) => {
-            if (res && res.players) { players = res.players; jobs = res.jobs || {}; moneyTypes = res.moneyTypes || moneyTypes; render(); }
+            if (res && res.players) {
+                players = res.players; jobs = res.jobs || {}; moneyTypes = res.moneyTypes || moneyTypes;
+                if (res.world) { world = res.world; }
+                render(); renderWorld();
+            }
         });
     }
 
@@ -176,7 +201,8 @@
         const m = e.data || {};
         if (m.action === 'open') {
             players = m.players || []; jobs = m.jobs || {}; moneyTypes = m.moneyTypes || moneyTypes;
-            render(); app.classList.remove('hidden');
+            if (m.world) { world = m.world; }
+            render(); renderWorld(); app.classList.remove('hidden');
         } else if (m.action === 'close') {
             app.classList.add('hidden'); closeModal();
         }

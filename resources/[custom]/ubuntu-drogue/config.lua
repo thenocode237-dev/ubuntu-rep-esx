@@ -54,9 +54,11 @@ Config.Zones = {
 Config.Supplier = {
     label = 'Grossiste — approvisionnement',
     ped = 'g_m_m_armboss_01',
-    -- Entrepôt en bord de rivière (El Burro / La Mesa). Spot esx_drugs vérifié
-    -- accessible ; l'ancien Z (33) flottait au-dessus du sol réel (~27).
-    coords = vector4(-586.74, -1601.01, 27.01, 90.0),
+    -- Rue résidentielle ouverte de Davis / Grove St (quartier chaud, près de la
+    -- zone de deal est). Spot esx_drugs sourcé où un PNJ se tient déjà = accessible.
+    -- Les tentatives précédentes (bord de rivière El Burro) étaient dans un entrepôt
+    -- industriel clôturé → bloquées.
+    coords = vector4(119.16, -1909.68, 20.93, 155.0),
     blip = { sprite = 51, color = 2, scale = 0.7 }, -- discret, vert
     stock = {
         { item = 'joint',       label = 'Joint',   price = 100 },

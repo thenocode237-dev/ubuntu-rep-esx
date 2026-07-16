@@ -8,6 +8,10 @@ Locales.en = {
     },
     success = {
         ['announced'] = 'Announcement sent',
+        ['ped_off'] = 'Pedestrian NPCs disabled',
+        ['ped_on'] = 'Pedestrian NPCs enabled',
+        ['veh_off'] = 'NPC traffic disabled',
+        ['veh_on'] = 'NPC traffic enabled',
         ['banned'] = '%{name} has been banned',
         ['money'] = '%{amount} %{type} applied to %{name}',
         ['money_target'] = 'An admin adjusted your %{type} by %{amount}',

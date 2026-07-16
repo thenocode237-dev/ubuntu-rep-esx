@@ -54,8 +54,10 @@ Config.Garages = {
         id = 'airport',
         label = 'Garage — Aéroport',
         ped   = 's_m_y_valet_01',
-        coords = vector4(-1037.5, -2737.6, 20.2, 330.0),
-        spawn  = vector4(-1033.0, -2730.0, 20.1, 240.0),
+        -- Garage public canonique qb-garages, HORS de l'enceinte clôturée du LSIA
+        -- (l'ancien -1037,-2737 était derrière la barrière = inaccessible à pied).
+        coords = vector4(-796.6, -2025.1, 8.9, 138.0),
+        spawn  = vector4(-802.0, -2022.0, 8.9, 230.0),
         blip = { sprite = 357, color = 3, scale = 0.8 },
     },
 }

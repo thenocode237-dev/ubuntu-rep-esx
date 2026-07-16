@@ -115,7 +115,13 @@ lib.callback.register('ubuntu-admin:server:getPlayers', function(source)
         }
     end
     table.sort(list, function(a, b) return a.id < b.id end)
-    return { allowed = true, players = list, jobs = ESX.GetJobs(), moneyTypes = Config.MoneyTypes }
+    return {
+        allowed = true, players = list, jobs = ESX.GetJobs(), moneyTypes = Config.MoneyTypes,
+        world = {
+            peds = GlobalState.npcPedDisabled or false,
+            vehicles = GlobalState.npcVehDisabled or false,
+        },
+    }
 end)
 
 -- --- Actions ----------------------------------------------------------------
@@ -138,6 +144,21 @@ RegisterNetEvent('ubuntu-admin:server:action', function(action, targetId, args)
         TriggerClientEvent('ubuntu-admin:client:announce', -1, msg)
         discordLog('Annonce', adminName(src), msg)
         return notify(src, Lang:t('success.announced'), 'success')
+
+    elseif action == 'toggleped' then
+        -- Présence des PNJ piétons dans le monde (global). GlobalState se
+        -- réplique automatiquement à tous les clients + aux nouveaux arrivants.
+        local off = args.state and true or false
+        GlobalState.npcPedDisabled = off
+        discordLog('PNJ piétons', adminName(src), off and 'désactivés' or 'activés')
+        return notify(src, Lang:t(off and 'success.ped_off' or 'success.ped_on'), 'success')
+
+    elseif action == 'togglevehicle' then
+        -- Présence du trafic (véhicules conduits par des PNJ), global.
+        local off = args.state and true or false
+        GlobalState.npcVehDisabled = off
+        discordLog('Trafic PNJ', adminName(src), off and 'désactivé' or 'activé')
+        return notify(src, Lang:t(off and 'success.veh_off' or 'success.veh_on'), 'success')
     end
 
     -- Actions ciblant un joueur.

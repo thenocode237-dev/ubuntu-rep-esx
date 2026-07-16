@@ -17,6 +17,7 @@ local function openPanel()
         players = res.players,
         jobs = res.jobs,
         moneyTypes = res.moneyTypes,
+        world = res.world,
     })
 end
 
@@ -85,6 +86,30 @@ RegisterNetEvent('ubuntu-admin:client:announce', function(msg)
         multiline = true,
         args = { 'ANNONCE', msg },
     })
+end)
+
+-- --- Monde : coupe l'apparition des PNJ / du trafic (piloté par GlobalState) --
+-- L'état est global (posé par le staff via le panel) et répliqué à tous les
+-- clients + aux nouveaux arrivants. Les natives de densité n'affectent que les
+-- NOUVEAUX spawns : les entités déjà présentes disparaissent en s'éloignant.
+CreateThread(function()
+    while true do
+        local peds = GlobalState.npcPedDisabled
+        local veh = GlobalState.npcVehDisabled
+        if peds then
+            SetPedDensityMultiplierThisFrame(0.0)
+            SetScenarioPedDensityMultiplierThisFrame(0.0, 0.0)
+        end
+        if veh then
+            SetVehicleDensityMultiplierThisFrame(0.0)
+            SetRandomVehicleDensityMultiplierThisFrame(0.0)
+            SetParkedVehicleDensityMultiplierThisFrame(0.0)
+            SetGarbageTrucks(false)
+            SetRandomBoats(false)
+            SetRandomTrains(false)
+        end
+        Wait((peds or veh) and 0 or 1000)
+    end
 end)
 
 -- Spectate basique : suit la cible en observateur invisible ; retap pour sortir.
