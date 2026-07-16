@@ -15,15 +15,33 @@
 -- Correctif :
 --   A chaque chargement du joueur (nouveau perso, reconnexion, reanimation),
 --   on RE-gele le ped et on force le chargement de la collision autour de son point
---   de spawn ; on ne le relache que lorsque la collision est prete (garde-fou 15 s).
+--   de spawn ; on ne le relache que lorsque la collision est prete (garde-fou 20 s).
 --   On re-affirme le gel a chaque tick pour gagner la course contre le
 --   FreezeEntityPosition(false) du spawn (aucun fichier upstream n'est modifie
 --   -> survit a un re-pin des ressources).
 --
 --   En mono-personnage (sans multichar), c'est aussi cette ressource qui FERME le
---   loadscreen (ShutdownLoadingScreenNui) au premier chargement, car le template
---   utilise loadscreen_manual_shutdown 'yes'.
+--   loadscreen (ShutdownLoadingScreenNui), car le template utilise
+--   loadscreen_manual_shutdown 'yes'. IMPORTANT : on ne ferme le loadscreen qu'a la
+--   FIN du grounding (collision chargee, joueur pose au sol) et jamais des
+--   esx:playerLoaded/playerSpawned — ces events se declenchent AVANT que la map ne
+--   soit streamee, donc fermer le loadscreen a ce moment-la exposerait le monde
+--   encore noir pendant tout le chargement (bug "ecran noir pendant le chargement").
 -- ---------------------------------------------------------------------------
+
+-- Ferme le loadscreen (mono-perso : plus de multichar pour le faire). Idempotent.
+-- Fondu pour masquer la bascule loadscreen -> monde (evite un flash noir).
+local loadscreenClosed = false
+local function shutdownLoadscreen()
+    if loadscreenClosed then return end
+    loadscreenClosed = true
+    CreateThread(function()
+        DoScreenFadeOut(0)
+        Wait(200) -- laisse le monde rendre une frame derriere le voile avant de retirer le NUI
+        ShutdownLoadingScreenNui()
+        DoScreenFadeIn(500)
+    end)
+end
 
 local groundingInProgress = false
 
@@ -69,29 +87,21 @@ local function groundPlayerSafely()
         -- Collision prête (ou garde-fou atteint) : on relâche le joueur.
         FreezeEntityPosition(PlayerPedId(), false)
         groundingInProgress = false
-    end)
-end
 
--- Ferme le loadscreen (mono-perso : plus de multichar pour le faire). Idempotent.
-local loadscreenClosed = false
-local function shutdownLoadscreen()
-    if loadscreenClosed then return end
-    loadscreenClosed = true
-    if GetResourceState('spawnmanager') ~= 'missing' then
-        -- spawnmanager gere deja le shutdown dans certains flux ; on force par surete.
-    end
-    ShutdownLoadingScreenNui()
+        -- Le monde est maintenant chargé/visible : c'est SEULEMENT ici qu'on retire le
+        -- loadscreen (jamais plus tôt, sinon écran noir pendant le streaming). Idempotent
+        -- + borné par le garde-fou 20 s → on ne reste jamais bloqué sur le loadscreen.
+        shutdownLoadscreen()
+    end)
 end
 
 -- Declenche a chaque fois qu'ESX charge/relance le joueur.
 RegisterNetEvent('esx:playerLoaded', function()
-    shutdownLoadscreen()
     groundPlayerSafely()
 end)
 
 -- Filet de securite : certaines versions n'emettent esx:playerLoaded qu'apres la
 -- selection ; on couvre aussi le spawn natif.
 AddEventHandler('playerSpawned', function()
-    shutdownLoadscreen()
     groundPlayerSafely()
 end)

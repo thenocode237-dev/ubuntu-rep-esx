@@ -50,17 +50,6 @@ html, body {
         linear-gradient(180deg, rgba(5,7,13,0.35) 0%, rgba(5,7,13,0.55) 55%, rgba(5,7,13,0.85) 100%);
 }
 
-/* --- Bande drapeau ------------------------------------------------------- */
-.flag-bar {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    height: 5px;
-    display: flex;
-    z-index: 5;
-}
-.flag-bar span { flex: 1; }
-.flag-accent { background: var(--accent); }
-
 /* --- Scène centrale ------------------------------------------------------ */
 .stage {
     position: relative;

@@ -118,9 +118,27 @@ CreateThread(function()
             SetBlockingOfNonTemporaryEvents(ped, true)
             SetModelAsNoLongerNeeded(model)
             peds[#peds + 1] = ped
+            teller.__ped = ped
         end
     end
 end)
+
+-- Cale le PNJ + le marqueur sur le sol réel dès que le joueur est assez proche
+-- pour que la map soit streamée (GetGroundZ fiable). Évite les PNJ/marqueurs
+-- flottants ou enterrés quand le Z de la config n'est pas exact. Idempotent
+-- (résultat mis en cache) et prudent : on ne déplace jamais un PNJ vers le niveau
+-- de la mer si le sol n'est pas trouvé, ni de plus de 12 m.
+local function groundSnap(rec, x, y, z)
+    if rec.__gz then return rec.__gz end
+    local ok, gz = GetGroundZFor_3dCoord(x + 0.0, y + 0.0, z + 3.0, false)
+    if ok and gz > 0.5 and math.abs(gz - z) < 12.0 then
+        rec.__gz = gz
+        if rec.__ped and DoesEntityExist(rec.__ped) then
+            SetEntityCoords(rec.__ped, x, y, gz, false, false, false, false)
+        end
+    end
+    return rec.__gz
+end
 
 CreateThread(function()
     while true do
@@ -132,7 +150,8 @@ CreateThread(function()
             if dist < Config.DrawDistance then
                 sleep = 0
                 local c = Config.MarkerColor
-                DrawMarker(1, tv.x, tv.y, tv.z - 0.98, 0, 0, 0, 0, 0, 0, 1.2, 1.2, 0.5, c.r, c.g, c.b, 120, false, false, 2, false)
+                local baseZ = (groundSnap(teller, tv.x, tv.y, tv.z) or (tv.z - 1.0)) + 0.02
+                DrawMarker(1, tv.x, tv.y, baseZ, 0, 0, 0, 0, 0, 0, 1.2, 1.2, 0.5, c.r, c.g, c.b, 120, false, false, 2, false)
                 if dist < Config.MarkerRadius then
                     DrawText3D(tv.x, tv.y, tv.z, Lang:t('prompt.open_bank'))
                     if IsControlJustReleased(0, Config.InteractKey) then

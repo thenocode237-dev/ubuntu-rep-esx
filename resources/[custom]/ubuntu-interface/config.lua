@@ -45,6 +45,16 @@ Config.PauseMenu = {
     syncMoney = true,
 }
 
+-- --- Roue de sélection d'arme à la molette ----------------------------------
+-- Par défaut GTA fait défiler l'arme directement à la molette et n'ouvre la
+-- roue de sélection qu'en maintenant TAB. Activé, un coup de molette (haut ou
+-- bas) ouvre la roue et la maintient affichée `openMs` millisecondes pour
+-- choisir tranquillement (chaque nouveau cran de molette relance le minuteur).
+Config.WeaponWheel = {
+    enabled = true,
+    openMs = 1500,
+}
+
 -- --- Carte : points d'intérêt (blips) ---------------------------------------
 -- Carte « officielle » du serveur ; s'ajoute aux blips créés par d'autres
 -- ressources. `menu = true` fait apparaître le lieu dans « Se repérer » (F1).
@@ -54,7 +64,7 @@ Config.Blips = {
     -- === Services publics ===
     { label = 'Police',          sprite = 60,  color = 29, scale = 0.9, coords = vector3(428.3, -984.2, 30.7),   menu = true },
     { label = 'Hôpital',         sprite = 61,  color = 1,  scale = 0.9, coords = vector3(298.6, -584.4, 43.3),   menu = true },
-    { label = 'Mairie',          sprite = 419, color = 0,  scale = 0.8, coords = vector3(-545.0, -204.0, 38.2),  menu = true },
+    -- Blip Mairie géré par `ubuntu-mairie` (PNJ + centre pour l'emploi) — pas de doublon ici.
 
     -- === Banques ===
     -- Blips gérés par `ubuntu-banque` (guichets interactifs) — pas de doublon ici.

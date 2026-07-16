@@ -20,7 +20,7 @@ install: ## Prépare l'arborescence data/ et le fichier .env
 	@if [ ! -f .env ]; then cp .env.example .env; echo "-> .env créé depuis .env.example (à personnaliser)"; fi
 	@echo "Installation prête. Éditez .env, lancez 'make up', puis 'make resources' (couche RP QBCore)."
 
-resources: ## Installe/actualise la couche RP QBCore (clones épinglés + overrides + SQL)
+resources: ## Installe/actualise la couche RP  (clones épinglés + overrides + SQL)
 	@bash scripts/install-resources.sh
 
 up: ## Démarre la stack V1 (build + détaché)

@@ -7,6 +7,7 @@ Locales.fr = {
         ['no_permission'] = 'Vous n\'avez pas la permission',
         ['invalid_target'] = 'Aucun joueur trouvé avec cet identifiant',
         ['invalid_amount'] = 'Montant invalide',
+        ['inventory_full'] = 'Inventaire plein : objets non livrés',
     },
     success = {
         ['purchased'] = 'Achat effectué : %{label} (-%{cost})',

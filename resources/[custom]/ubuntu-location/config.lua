@@ -39,8 +39,10 @@ Config.Points = {
         id = 'downtown_scooters', type = 'scooter',
         label = 'Location scooter — Centre-ville',
         ped = 's_m_m_autoshop_01',
-        coords = vector4(215.0, -810.0, 30.7, 340.0),
-        spawn  = vector4(218.5, -813.0, 30.6, 250.0),
+        -- Bord nord de la place Legion (trottoir dégagé), à l'écart du garage
+        -- pour éviter que les deux PNJ ne se chevauchent (ils étaient à ~1 m).
+        coords = vector4(199.0, -875.0, 30.7, 160.0),
+        spawn  = vector4(205.0, -872.0, 30.7, 250.0),
         blip = { sprite = 226, color = 5, scale = 0.7 }, -- scooter, jaune
         vehicles = {
             { model = 'faggio',  label = 'Scooter urbain', fee = 800,  deposit = 2000 },

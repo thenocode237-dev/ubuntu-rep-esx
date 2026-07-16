@@ -62,12 +62,29 @@ OXTARGET_URL="https://github.com/overextended/ox_target/releases/download/${OXTA
 ESX_CORE_VERSION="1.13.5"
 ESX_CORE_URL="https://github.com/esx-framework/esx_core"
 
+# ESX addons (métiers + comptes société) : monorepo esx-framework/ESX-Legacy-Addons.
+# Même modèle qu'esx_core, mais on copie SEULEMENT les addons voulus (clôture des
+# dépendances d'esx_policejob + esx_property pour le housing). NE PAS aplatir tout
+# [esx_addons] : il embarque esx_banking/esx_shops/esx_jobs/esx_garage/... qui
+# entreraient en conflit avec ubuntu-banque et ajouteraient des jobs/shops par défaut.
+# Le dépôt n'a PAS de release → on épingle un SHA de main (GitHub autorise le fetch SHA).
+ESX_ADDONS_VERSION="a94ede6f0965947d5fe2cb145fd894e32220a1ff"
+ESX_ADDONS_URL="https://github.com/esx-framework/ESX-Legacy-Addons"
+# Clôture Phase 2 (police) : esx_policejob -> esx_billing + esx_vehicleshop ;
+# esx_society -> cron (déjà dans esx_core) + esx_addonaccount ; + esx_datastore.
+# esx_property = housing (Phase 3). esx_ambulancejob (EMS : mort/réanimation/détresse)
+# = activé ; sa dépendance dure esx_skin est retirée par un override (fivem-appearance
+# remplace esx_skin ; les appels skinchanger:* du vestiaire restent no-op non fatals,
+# comme esx_policejob).
+ESX_ADDONS=(esx_addonaccount esx_datastore esx_society esx_billing esx_vehicleshop esx_policejob esx_ambulancejob esx_property)
+
 # -----------------------------------------------------------------------------
 # Ressources clonées (git). Format : catégorie|nom|url|révision
 # NB : esx_identity / esx_multicharacter / esx_skin / esx_menu_* viennent du
 # monorepo esx_core (install_esx_core), pas d'entrées séparées ici.
-# Les métiers ESX (police/ambulance/…) ne sont PAS sous l'org esx-framework en
-# dépôts séparés (intégrés/déplacés) → à sourcer en Phase 2 (voir README/CHANGELOG).
+# Les métiers ESX (police/ambulance/…) vivent dans le MONOREPO officiel
+# esx-framework/ESX-Legacy-Addons (dossiers [esx_addons]/) — installés sélectivement
+# par install_esx_addons (ci-dessus), pas d'entrées séparées ici.
 # -----------------------------------------------------------------------------
 RESOURCES=(
     # --- Standalone (framework-agnostiques) -----------------------------------
@@ -75,10 +92,23 @@ RESOURCES=(
     "[standalone]|interact-sound|https://github.com/plunkettscott/interact-sound|master"
     "[standalone]|rpemotes-reborn|https://github.com/alberttheprince/rpemotes-reborn|master"
     "[standalone]|LegacyFuel|https://github.com/InZidiuz/LegacyFuel|master"
+    # --- MLO : intérieur d'hôpital Pillbox (map streamée, framework-agnostique) ---
+    # Nettoie/remplace la coquille Pillbox vanilla → toutes les coords ESX existantes
+    # (esx_ambulancejob : blip/pharmacie EMS/vestiaire/spawns/respawn) restent valides.
+    # Pas de tag amont → épinglé sur `master` (noter le SHA courant en live pour un pin
+    # reproductible). ⚠️ Licence non explicite côté amont : vérifier avant usage public
+    # (alternative gratuite : github.com/evgenius33/Pillbox-Hospital-Interior).
+    "[standalone]|PillboxHospital|https://github.com/jobscraft/PillboxHospital-by-Jobscraft|master"
     # --- Apparence : fivem-appearance ESX + ox_lib (build web/game committé).
     # Remplace esx_skin/skinchanger (corrige les pieds/peau invisibles) ET fournit
     # la compat `skinchanger:modelLoaded` que es_extended attend pour finir le spawn.
     "[core]|fivem-appearance|https://github.com/wasabirobby/fivem-appearance|1.3.0"
+    # --- Phase 3 : voix + téléphone -------------------------------------------
+    # pma-voice : voix de proximité (mumble natif) — support des appels du téléphone.
+    "[standalone]|pma-voice|https://github.com/AvarianKnight/pma-voice|v7.0.0"
+    # z-phone : téléphone open-source ESX/ox (NUI pré-buildée, aucun build node).
+    # Framework forcé en ESX par configure_zphone (défaut du dépôt = QBX).
+    "[standalone]|z-phone|https://github.com/alfaben12/z-phone|v3.0.0"
 )
 
 command -v git >/dev/null || die "git est requis"
@@ -168,9 +198,51 @@ install_esx_core() {
     echo "${ESX_CORE_VERSION}" > "${marker}"
 }
 
+# ESX addons (monorepo ESX-Legacy-Addons) : clone en staging puis copie SÉLECTIVE des
+# dossiers de ${ESX_ADDONS[@]} dans data/resources/[esx_addons]/. Idempotent via .pin.
+install_esx_addons() {
+    local marker="${RES_DIR}/[esx_addons]/.pin"
+    # Idempotent SEULEMENT si le pin correspond ET que tous les addons voulus sont
+    # présents : ajouter un nom à ${ESX_ADDONS[@]} (ex. esx_ambulancejob) doit
+    # re-déclencher le clone même si la version n'a pas bougé.
+    if [[ -f "${marker}" && "$(cat "${marker}")" == "${ESX_ADDONS_VERSION}" ]]; then
+        local have_all=1 a
+        for a in "${ESX_ADDONS[@]}"; do
+            [[ -d "${RES_DIR}/[esx_addons]/${a}" ]] || { have_all=0; break; }
+        done
+        if [[ "${have_all}" -eq 1 ]]; then
+            log "  esx addons déjà en ${ESX_ADDONS_VERSION} — ignoré"
+            return 0
+        fi
+        log "  esx addons : nouvel addon demandé absent du disque — re-clonage..."
+    fi
+    log "  esx addons ${ESX_ADDONS_VERSION} (monorepo ESX-Legacy-Addons, sélectif)..."
+    local staging="${RES_DIR}/.esx_addons_staging"
+    rm -rf "${staging}"
+    mkdir -p "${staging}"
+    git init -q "${staging}"
+    git -C "${staging}" remote add origin "${ESX_ADDONS_URL}"
+    git -C "${staging}" fetch -q --depth 1 origin "${ESX_ADDONS_VERSION}" \
+        || die "fetch impossible : ESX-Legacy-Addons @ ${ESX_ADDONS_VERSION} (${ESX_ADDONS_URL}) — vérifier la ref"
+    git -C "${staging}" checkout -q FETCH_HEAD
+    rm -rf "${staging}/.git"
+    mkdir -p "${RES_DIR}/[esx_addons]"
+    local name src dest
+    for name in "${ESX_ADDONS[@]}"; do
+        src="${staging}/[esx_addons]/${name}"
+        dest="${RES_DIR}/[esx_addons]/${name}"
+        [[ -d "${src}" ]] || die "addon introuvable dans le monorepo : ${name} (structure [esx_addons] modifiée ?)"
+        rm -rf "${dest}"
+        cp -r "${src}" "${dest}"
+    done
+    rm -rf "${staging}"
+    echo "${ESX_ADDONS_VERSION}" > "${marker}"
+}
+
 log "Installation des ressources dans ${RES_DIR}/ ..."
 mkdir -p "${RES_DIR}"
 install_esx_core
+install_esx_addons
 install_release_zip "[standalone]" "oxmysql"             "${OXMYSQL_VERSION}"    "${OXMYSQL_URL}"
 install_release_zip "[standalone]" "ox_lib"              "${OXLIB_VERSION}"      "${OXLIB_URL}"
 install_release_zip "[core]"       "ox_inventory"        "${OXINV_VERSION}"      "${OXINV_URL}"
@@ -251,7 +323,7 @@ append_ox_items() {
         return 0
     fi
     local block
-    block=$'\t-- UBUNTU-RP items (ubuntu-drogue / ubuntu-braquages)\n\t[\'joint\'] = { label = \'Joint\', weight = 5, stack = true, close = true },\n\t[\'xtcbaggy\'] = { label = \'Ecstasy\', weight = 5, stack = true, close = true },\n\t[\'crack_baggy\'] = { label = \'Crack\', weight = 5, stack = true, close = true },\n\t[\'coke_baggy\'] = { label = \'Cocaine\', weight = 5, stack = true, close = true },\n\t[\'electronickit\'] = { label = \'Kit electronique\', weight = 500, stack = true, close = true },\n\t[\'thermite\'] = { label = \'Thermite\', weight = 1000, stack = true, close = true },'
+    block=$'\t-- UBUNTU-RP items (ubuntu-drogue / ubuntu-braquages)\n\t[\'joint\'] = { label = \'Joint\', weight = 5, stack = true, close = true },\n\t[\'xtcbaggy\'] = { label = \'Ecstasy\', weight = 5, stack = true, close = true },\n\t[\'crack_baggy\'] = { label = \'Crack\', weight = 5, stack = true, close = true },\n\t[\'coke_baggy\'] = { label = \'Cocaine\', weight = 5, stack = true, close = true },\n\t[\'electronickit\'] = { label = \'Kit electronique\', weight = 500, stack = true, close = true },\n\t[\'thermite\'] = { label = \'Thermite\', weight = 1000, stack = true, close = true },\n\t-- UBUNTU-RP premium items (ubuntu-premium — QoL non pay-to-win)\n\t[\'premium_snack\'] = { label = \'En-cas premium\', weight = 150, stack = true, close = true, consume = 1, client = { status = { hunger = 150000 }, usetime = 2500 } },\n\t[\'premium_drink\'] = { label = \'Boisson premium\', weight = 150, stack = true, close = true, consume = 1, client = { status = { thirst = 150000 }, usetime = 2000 } },\n\t[\'premium_coffee\'] = { label = \'Cafe premium\', weight = 100, stack = true, close = true, consume = 1, client = { status = { thirst = 80000, stress = -40000 }, usetime = 2000 } },\n\t[\'premium_giftbox\'] = { label = \'Coffret cadeau\', weight = 200, stack = true, close = true },'
     local tmp
     tmp="$(mktemp)"
     awk -v ins="${block}" '!done && /return[ \t]*[{]/ { print; print ins; done=1; next } { print }' \
@@ -265,47 +337,267 @@ append_ox_items() {
 }
 append_ox_items
 
-# --- 3. Import du schéma SQL ESX (si la stack tourne) --------------------------
-import_sql() {
-    if [[ -f "${SQL_MARKER}" ]]; then
-        log "Schéma SQL déjà importé (${SQL_MARKER} présent) — ignoré"
+# --- 2c. Téléphone achetable en supérette -------------------------------------
+# z-phone EXIGE l'item `phone` pour s'ouvrir (callback serveur HasPhone) ; sans
+# point de vente il est inaccessible. On ajoute `phone` à la boutique GENERAL
+# (supérettes 24/7) d'ox_inventory à 10 000 $. Idempotent via marqueur commentaire.
+append_phone_to_shop() {
+    local file
+    file="$(find "${RES_DIR}" -path '*/ox_inventory/data/shops.lua' -type f 2>/dev/null | head -n1)"
+    if [[ -z "${file}" ]]; then
+        log "ox_inventory/data/shops.lua introuvable — téléphone non ajouté en boutique"
         return 0
     fi
+    if grep -qF -- 'UBUNTU-RP phone' "${file}"; then
+        log "  téléphone déjà vendu en supérette — ignoré"
+        return 0
+    fi
+    local tmp
+    tmp="$(mktemp)"
+    # Insère la ligne juste après le `inventory = {` de la boutique GENERAL (1re boutique).
+    awk '
+        /General[ \t]*=[ \t]*\{/ { ingeneral=1 }
+        ingeneral && !done && /inventory[ \t]*=[ \t]*\{/ {
+            print
+            print "\t\t\t{ name = \x27phone\x27, price = 10000 }, -- UBUNTU-RP phone"
+            done=1; ingeneral=0; next
+        }
+        { print }
+    ' "${file}" > "${tmp}" && mv "${tmp}" "${file}"
+    if grep -qF -- 'UBUNTU-RP phone' "${file}"; then
+        log "  téléphone ajouté en supérette (item phone, 10 000 $)"
+    else
+        rm -f "${tmp}"
+        log "  AVERTISSEMENT : ajout du téléphone en supérette échoué (structure shops.lua modifiée ?)"
+    fi
+}
+append_phone_to_shop
+
+# --- 2c-bis. Arsenal complet à l'armurerie civile (Ammunation) -----------------
+# Par défaut, l'armurerie civile d'ox_inventory ne vend que couteau/batte/pistolet.
+# On y AJOUTE l'arsenal STANDARD (armes blanches libres + armes à feu gatées
+# license='weapon' + munitions), SANS explosifs (pas de RPG/minigun/grenades).
+# Le permis d'arme s'accorde via le panel ubuntu-admin (action weaponlicense).
+# Noms d'items validés contre ox_inventory/data/weapons.lua. Idempotent (marqueur).
+append_weapons_to_ammunation() {
+    local file
+    file="$(find "${RES_DIR}" -path '*/ox_inventory/data/shops.lua' -type f 2>/dev/null | head -n1)"
+    if [[ -z "${file}" ]]; then
+        log "ox_inventory/data/shops.lua introuvable — arsenal armurerie non ajouté"
+        return 0
+    fi
+    if grep -qF -- 'UBUNTU-RP arsenal' "${file}"; then
+        log "  arsenal armurerie déjà présent — ignoré"
+        return 0
+    fi
+    # WEAPON_KNIFE/WEAPON_BAT/WEAPON_PISTOL/ammo-9 sont déjà dans le shop → omis ici.
+    local block
+    block=$'\t\t\t-- UBUNTU-RP arsenal (armes standard, sans explosifs)'
+    block+=$'\n\t\t\t{ name = \'ammo-rifle\', price = 5 },'
+    block+=$'\n\t\t\t{ name = \'ammo-shotgun\', price = 6 },'
+    block+=$'\n\t\t\t{ name = \'ammo-sniper\', price = 10 },'
+    block+=$'\n\t\t\t{ name = \'ammo-heavysniper\', price = 15 },'
+    block+=$'\n\t\t\t{ name = \'ammo-50\', price = 8 },'
+    block+=$'\n\t\t\t{ name = \'ammo-44\', price = 8 },'
+    block+=$'\n\t\t\t{ name = \'ammo-45\', price = 5 },'
+    block+=$'\n\t\t\t{ name = \'ammo-rifle2\', price = 5 },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_KNUCKLE\', price = 150 },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_NIGHTSTICK\', price = 150 },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_MACHETE\', price = 300 },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_HATCHET\', price = 300 },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_CROWBAR\', price = 200 },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_COMBATPISTOL\', price = 1500, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_APPISTOL\', price = 2500, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_SNSPISTOL\', price = 1200, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_HEAVYPISTOL\', price = 2500, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_VINTAGEPISTOL\', price = 2000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_PISTOL50\', price = 3000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_REVOLVER\', price = 3500, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_PISTOLXM3\', price = 2800, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_MICROSMG\', price = 6000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_SMG\', price = 7000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_ASSAULTSMG\', price = 8000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_COMBATPDW\', price = 8500, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_MACHINEPISTOL\', price = 5000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_MINISMG\', price = 5500, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_ASSAULTRIFLE\', price = 12000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_CARBINERIFLE\', price = 14000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_ADVANCEDRIFLE\', price = 15000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_SPECIALCARBINE\', price = 15000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_BULLPUPRIFLE\', price = 13000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_COMPACTRIFLE\', price = 11000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_MILITARYRIFLE\', price = 16000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_HEAVYRIFLE\', price = 16000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_TACTICALRIFLE\', price = 15000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_PUMPSHOTGUN\', price = 7000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_SAWNOFFSHOTGUN\', price = 6000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_ASSAULTSHOTGUN\', price = 9000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_BULLPUPSHOTGUN\', price = 8000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_COMBATSHOTGUN\', price = 9500, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_HEAVYSHOTGUN\', price = 10000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_DBSHOTGUN\', price = 6500, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_SNIPERRIFLE\', price = 18000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_MARKSMANRIFLE\', price = 16000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_HEAVYSNIPER\', price = 25000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    block+=$'\n\t\t\t{ name = \'WEAPON_PRECISIONRIFLE\', price = 20000, metadata = { registered = true, ammo = 250 }, license = \'weapon\' },'
+    local tmp
+    tmp="$(mktemp)"
+    # Insère le bloc juste après le `inventory = {` de la boutique Ammunation (civile).
+    awk -v ins="${block}" '
+        /Ammunation[ \t]*=[ \t]*\{/ { inammu=1 }
+        inammu && !done && /inventory[ \t]*=[ \t]*\{/ {
+            print; print ins; done=1; inammu=0; next
+        }
+        { print }
+    ' "${file}" > "${tmp}" && mv "${tmp}" "${file}"
+    if grep -qF -- 'UBUNTU-RP arsenal' "${file}"; then
+        log "  arsenal ajouté à l'armurerie (pistolets/SMG/fusils/pompes/snipers + munitions)"
+    else
+        rm -f "${tmp}"
+        log "  AVERTISSEMENT : ajout de l'arsenal échoué (structure shops.lua modifiée ?)"
+    fi
+}
+append_weapons_to_ammunation
+
+# --- 2c-ter. Pharmacie PUBLIQUE (civile) dans ox_inventory ---------------------
+# La seule pharmacie existante (esx_ambulancejob) et le shop `Medicine` d'ox_inventory
+# sont RÉSERVÉS au job `ambulance` (aucun civil ne peut se soigner). On AJOUTE un shop
+# PUBLIC `Pharmacie` (sans `groups`) vendant bandage/medikit contre $, ciblé ox_target.
+# Injecté juste après le `return {` de shops.lua. Idempotent (marqueur commentaire).
+# Ne vend que medikit + bandage (seuls items médicaux présents dans data/items.lua).
+append_pharmacy_shop() {
+    local file
+    file="$(find "${RES_DIR}" -path '*/ox_inventory/data/shops.lua' -type f 2>/dev/null | head -n1)"
+    if [[ -z "${file}" ]]; then
+        log "ox_inventory/data/shops.lua introuvable — pharmacie publique non ajoutée"
+        return 0
+    fi
+    if grep -qF -- 'UBUNTU-RP pharmacie' "${file}"; then
+        log "  pharmacie publique déjà présente — ignoré"
+        return 0
+    fi
+    local block
+    block=$'\tPharmacie = { -- UBUNTU-RP pharmacie'
+    block+=$'\n\t\tname = \'Pharmacie\','
+    block+=$'\n\t\tblip = { id = 51, colour = 25, scale = 0.9 },'
+    block+=$'\n\t\tinventory = {'
+    block+=$'\n\t\t\t{ name = \'bandage\', price = 250 },'
+    block+=$'\n\t\t\t{ name = \'medikit\', price = 1500 },'
+    block+=$'\n\t\t}, locations = {'
+    block+=$'\n\t\t\tvec3(311.24, -593.52, 43.29), -- Entrée piétonne hôpital Pillbox (accessible)'
+    block+=$'\n\t\t}, targets = {'
+    block+=$'\n\t\t\t{ loc = vec3(311.24, -593.52, 43.29), length = 0.6, width = 0.6, heading = 0.0, minZ = 42.5, maxZ = 44.3, distance = 2.0 },'
+    block+=$'\n\t\t}'
+    block+=$'\n\t},'
+    local tmp
+    tmp="$(mktemp)"
+    # Insère le nouveau shop juste après la 1re ligne `return {` du fichier shops.lua.
+    awk -v ins="${block}" '
+        !done && /return[ \t]*\{/ {
+            print; print ins; done=1; next
+        }
+        { print }
+    ' "${file}" > "${tmp}" && mv "${tmp}" "${file}"
+    if grep -qF -- 'UBUNTU-RP pharmacie' "${file}"; then
+        log "  pharmacie ajoutée en boutique (publique : bandage 250 $, medikit 1500 $)"
+    else
+        rm -f "${tmp}"
+        log "  AVERTISSEMENT : ajout de la pharmacie publique échoué (structure shops.lua modifiée ?)"
+    fi
+}
+append_pharmacy_shop
+
+# --- 2d. z-phone : sélection du framework ESX (défaut du dépôt = QBX) ----------
+# Le téléphone lit Config.Core dans config/config.lua ; on force "ESX" (idempotent).
+configure_zphone() {
+    local file
+    file="$(find "${RES_DIR}" -path '*/z-phone/config/config.lua' -type f 2>/dev/null | head -n1)"
+    [[ -f "${file}" ]] || return 0
+    if grep -qE '^[[:space:]]*Config\.Core[[:space:]]*=[[:space:]]*"ESX"' "${file}"; then
+        log "  z-phone déjà en Config.Core=ESX — ignoré"
+        return 0
+    fi
+    sed -i -E 's/^([[:space:]]*Config\.Core[[:space:]]*=[[:space:]]*)"[^"]*"/\1"ESX"/' "${file}"
+    log "  z-phone configuré en Config.Core=ESX"
+}
+configure_zphone
+
+# --- 3. Import du schéma SQL ESX (si la stack tourne) --------------------------
+# Ensemble des codes d'erreur MariaDB « déjà présent » (ré-import idempotent bénin).
+readonly SQL_BENIGN='ERROR (1050|1060|1061|1062|1022|1826|1359|1304|1537)'
+
+# exec_sql_file <fichier> <user> <pass> <db>
+# Importe un .sql en classant stderr par code d'erreur MariaDB.
+# Renvoie : 0 = importé OK, 1 = tout bénin (déjà présent), 2 = vraie erreur (affichée).
+exec_sql_file() {
+    local f="$1" dbuser="$2" dbpass="$3" db="$4" err rc fatal
+    # 2>&1 >/dev/null : ne capturer QUE stderr (stdout jeté) — l'ordre des redirections compte.
+    err="$(docker compose exec -T mariadb mariadb -u"${dbuser}" -p"${dbpass}" \
+              "${db}" < "${f}" 2>&1 >/dev/null)"
+    rc=$?
+    [[ "${rc}" -eq 0 ]] && return 0              # succès (bruit stderr éventuel ignoré)
+    # Échec : ne garder que les lignes ERROR NON bénignes (le warning « Using a password… »
+    # de mariadb ne commence pas par ^ERROR → naturellement ignoré).
+    fatal="$(printf '%s\n' "${err}" | grep -E '^ERROR' | grep -Ev "${SQL_BENIGN}" || true)"
+    [[ -z "${fatal}" ]] && return 1              # que du bénin (déjà présent)
+    printf '%s\n' "${fatal}" | while IFS= read -r l; do
+        log "    ${l}"
+    done
+    return 2                                       # vraie erreur
+}
+
+import_sql() {
     # On importe avec l'utilisateur applicatif (privilèges suffisants sur la base
     # du serveur) — plus robuste que root (le mot de passe root du volume peut différer).
-    local dbuser="${MYSQL_USER:-fivem}" dbpass="${MYSQL_PASSWORD:-}" db="${MYSQL_DATABASE:-fivem}"
+    local dbuser="${MYSQL_USER:-fivem}" dbpass="${MYSQL_PASSWORD:-fivem}" db="${MYSQL_DATABASE:-fivem}"
     if ! docker compose exec -T mariadb mariadb -u"${dbuser}" -p"${dbpass}" \
             -e "SELECT 1" "${db}" >/dev/null 2>&1; then
         log "MariaDB injoignable — lancez 'make up' puis relancez 'make resources' pour importer le SQL."
         return 0
     fi
 
-    # Schéma ESX officiel : data/resources/[SQL]/legacy.sql (fourni par esx_core).
-    if [[ -d "${ESX_SQL_DIR}" ]]; then
-        local s
+    # (a) Schéma ESX de base (data/resources/[SQL]/legacy.sql) : importé UNE fois (marqueur).
+    # Ses CREATE TABLE sont sans IF NOT EXISTS => un ré-import (marqueur supprimé à la main)
+    # tolère les tables déjà présentes (exec_sql_file les classe bénignes) au lieu de mourir.
+    # Une VRAIE erreur (hors doublons) reste FATALE : le schéma de base conditionne tout.
+    if [[ -f "${SQL_MARKER}" ]]; then
+        log "Schéma ESX de base déjà importé (${SQL_MARKER}) — ignoré"
+    elif [[ -d "${ESX_SQL_DIR}" ]]; then
+        local s rc
         for s in "${ESX_SQL_DIR}"/*.sql; do
             [[ -f "${s}" ]] || continue
             log "Import du schéma ESX officiel ($(basename "${s}"))..."
-            docker compose exec -T mariadb mariadb -u"${dbuser}" -p"${dbpass}" "${db}" < "${s}" \
-                || die "import du schéma ESX ($(basename "${s}")) échoué"
+            exec_sql_file "${s}" "${dbuser}" "${dbpass}" "${db}" && rc=0 || rc=$?
+            [[ "${rc}" -eq 2 ]] && die "import du schéma ESX ($(basename "${s}")) échoué — voir l'erreur ci-dessus"
         done
+        touch "${SQL_MARKER}"
     else
         log "AVERTISSEMENT : ${ESX_SQL_DIR} introuvable — schéma ESX officiel non importé (esx_core installé ?)"
     fi
 
-    # SQL additionnels livrés par les ressources (es_extended.sql, ox_inventory...).
-    # Non-fatals ; migrations exclues.
-    local f
+    # (b) SQL livré par les ressources (jobs/grades police, addon_account, datastore,
+    # z-phone, properties…) : rejoué à CHAQUE run (non-fatal, idempotent — CREATE IF NOT
+    # EXISTS / INSERT déjà présent ignoré). Ajouter un addon n'exige donc PAS de supprimer
+    # le marqueur. `legacy.sql` (profondeur 2) est hors de ce scan (mindepth 3).
+    # `es_extended.sql` (bootstrap DB autonome d'ESX core : CREATE DATABASE + USE
+    # `es_extended`) est EXCLU — on importe le schéma dans la base `fivem` via
+    # esx-base.sql/legacy.sql ; l'exécuter échouerait (Access denied sur `es_extended`).
+    local f rc ok=0 skip=0 err=0
     while IFS= read -r f; do
-        log "  import $(basename "$(dirname "${f}")")/$(basename "${f}")"
-        docker compose exec -T mariadb mariadb -u"${dbuser}" -p"${dbpass}" \
-            "${db}" < "${f}" 2>/dev/null \
-            || log "  AVERTISSEMENT : import partiel (déjà couvert par le schéma officiel) — ignoré"
+        # Appel protégé (&& / ||) : sous `set -e`, un retour ≠ 0 (1 = déjà présent,
+        # 2 = vraie erreur) tuerait le script AVANT le `case`.
+        exec_sql_file "${f}" "${dbuser}" "${dbpass}" "${db}" && rc=0 || rc=$?
+        case "${rc}" in
+            0) ok=$((ok+1)) ;;
+            1) skip=$((skip+1)) ;;
+            2) err=$((err+1))
+               log "  ERREUR SQL : $(basename "$(dirname "${f}")")/$(basename "${f}") (voir ci-dessus)" ;;
+        esac
     done < <(find "${RES_DIR}" -mindepth 3 -maxdepth 4 -name '*.sql' \
-                  ! -name 'migrate*' ! -iname '*upgrade*' | sort)
-
-    touch "${SQL_MARKER}"
-    log "SQL importé (supprimez ${SQL_MARKER} pour forcer un ré-import)."
+                  ! -name 'migrate*' ! -iname '*upgrade*' \
+                  ! -name 'es_extended.sql' | sort)
+    log "SQL ressources : ${ok} importé(s), ${skip} déjà présent(s) ignoré(s), ${err} en erreur."
+    [[ "${err}" -gt 0 ]] && log "AVERTISSEMENT : ${err} fichier(s) SQL en vraie erreur — voir détail ci-dessus."
 }
 import_sql
 
@@ -319,15 +611,22 @@ import_custom_sql() {
         log "MariaDB injoignable — SQL des ressources [custom] non importé (relancez après 'make up')."
         return 0
     fi
-    local f found=0
+    local f rc found=0 ok=0 skip=0 err=0
     while IFS= read -r f; do
         found=1
-        log "  import [custom] $(basename "$(dirname "${f}")")/$(basename "${f}")"
-        docker compose exec -T mariadb mariadb -u"${dbuser}" -p"${dbpass}" \
-            "${db}" < "${f}" 2>/dev/null \
-            || log "  AVERTISSEMENT : import [custom] partiel — ignoré"
+        # Appel protégé (cf. import_sql) : `set -e` sinon tue au 1er SQL déjà présent.
+        exec_sql_file "${f}" "${dbuser}" "${dbpass}" "${db}" && rc=0 || rc=$?
+        case "${rc}" in
+            0) ok=$((ok+1)) ;;
+            1) skip=$((skip+1)) ;;
+            2) err=$((err+1))
+               log "  ERREUR SQL [custom] : $(basename "$(dirname "${f}")")/$(basename "${f}") (voir ci-dessus)" ;;
+        esac
     done < <(find "resources/[custom]" -mindepth 2 -maxdepth 2 -name '*.sql' | sort)
-    [[ "${found}" -eq 1 ]] && log "SQL des ressources [custom] importé (idempotent)."
+    if [[ "${found}" -eq 1 ]]; then
+        log "SQL [custom] : ${ok} importé(s), ${skip} déjà présent(s) ignoré(s), ${err} en erreur."
+        [[ "${err}" -gt 0 ]] && log "AVERTISSEMENT : ${err} fichier(s) SQL [custom] en vraie erreur — voir détail ci-dessus."
+    fi
     return 0
 }
 import_custom_sql

@@ -54,7 +54,9 @@ Config.Zones = {
 Config.Supplier = {
     label = 'Grossiste — approvisionnement',
     ped = 'g_m_m_armboss_01',
-    coords = vector4(-598.0, -1622.0, 33.0, 90.0),
+    -- Entrepôt en bord de rivière (El Burro / La Mesa). Spot esx_drugs vérifié
+    -- accessible ; l'ancien Z (33) flottait au-dessus du sol réel (~27).
+    coords = vector4(-586.74, -1601.01, 27.01, 90.0),
     blip = { sprite = 51, color = 2, scale = 0.7 }, -- discret, vert
     stock = {
         { item = 'joint',       label = 'Joint',   price = 100 },

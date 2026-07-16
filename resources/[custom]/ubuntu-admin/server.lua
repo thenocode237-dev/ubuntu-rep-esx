@@ -123,7 +123,7 @@ end)
 local function getTarget(src, targetId)
     local target = ESX.GetPlayerFromId(tonumber(targetId) or -1)
     if not target then notify(src, Lang:t('error.invalid_target'), 'error') end
-    return target
+    return target 
 end
 
 RegisterNetEvent('ubuntu-admin:server:action', function(action, targetId, args)
@@ -231,6 +231,28 @@ RegisterNetEvent('ubuntu-admin:server:action', function(action, targetId, args)
             exports['ubuntu-premium']:AddPoints(tsrc, amount)
             discordLog('Points', adminName(src), ('%s : +%d Points'):format(tname, amount))
             notify(src, Lang:t('success.points', { amount = amount, name = tname }), 'success')
+        end
+
+    elseif action == 'weaponlicense' then
+        -- Permis d'arme (table ESX `user_licenses`) : débloque l'achat des armes à
+        -- feu gatées `license = 'weapon'` par ox_inventory (bridge ESX teste juste
+        -- l'existence de la ligne owner = xPlayer.identifier). Idempotent.
+        local grant = args.grant and true or false
+        local owner = target.identifier
+        if grant then
+            local exists = MySQL.scalar.await(
+                'SELECT 1 FROM user_licenses WHERE type = ? AND owner = ? LIMIT 1', { 'weapon', owner })
+            if not exists then
+                MySQL.insert.await('INSERT INTO user_licenses (type, owner) VALUES (?, ?)', { 'weapon', owner })
+            end
+            discordLog('Permis arme', adminName(src), tname .. ' — accordé')
+            notify(src, Lang:t('success.weaponlicense_grant', { name = tname }), 'success')
+            notify(tsrc, Lang:t('success.weaponlicense_you_grant'), 'primary')
+        else
+            MySQL.query.await('DELETE FROM user_licenses WHERE type = ? AND owner = ?', { 'weapon', owner })
+            discordLog('Permis arme', adminName(src), tname .. ' — retiré')
+            notify(src, Lang:t('success.weaponlicense_revoke', { name = tname }), 'success')
+            notify(tsrc, Lang:t('success.weaponlicense_you_revoke'), 'primary')
         end
     end
 end)

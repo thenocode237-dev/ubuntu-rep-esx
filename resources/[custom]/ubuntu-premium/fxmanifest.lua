@@ -35,6 +35,7 @@ dependencies {
     'es_extended',
     'ox_lib',
     'oxmysql',
+    'ox_inventory',
 }
 
 lua54 'yes'

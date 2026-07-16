@@ -16,12 +16,18 @@ ESX** (framework **ESX Legacy** + stack **ox** : ox_lib / ox_inventory / ox_targ
 > 🔀 **Migration QBCore → ESX.** Le serveur a été bâti à l'origine sur **QBCore** (thème Cameroun /
 > Afrique). Il est migré vers **ESX Legacy (stack ox)**, base propre, sans l'habillage africain
 > (décision utilisateur). **Phase 1 = FAITE** (socle ESX + `ubuntu-premium`/`ubuntu-admin`/
-> `ubuntu-interface`/`ubuntu-location`/`ubuntu-antichute`/`ubuntu-loadscreen`). **Phase 2 = FAITE**
-> (métiers ESX police/ambulance + `esx_addonaccount`/`esx_society` ; `ubuntu-braquages` &
-> `ubuntu-drogue` **portés en ESX/ox** et chargés ; items drogue/braquage ajoutés à ox_inventory).
-> **Phase 3 = STAGÉE (désactivée)** : téléphone (npwd) + housing câblés en blocs commentés à activer
-> après validation en jeu. ⚠️ La section « Couche RP QBCore » plus bas est **HISTORIQUE**. ⚠️ **Toutes
-> les refs ESX sont posées sans réseau → à confirmer au 1er `make resources`.** Détail : `CHANGELOG.md`.
+> `ubuntu-interface`/`ubuntu-location`/`ubuntu-antichute`/`ubuntu-loadscreen`). **Phase 2 = FAITE
+> (métier POLICE)** — `esx_policejob` (+ sa clôture `esx_addonaccount`/`esx_datastore`/`esx_society`/
+> `esx_billing`/`esx_vehicleshop`) sourcé du **monorepo `esx-framework/ESX-Legacy-Addons`** et `ensure` ;
+> `ubuntu-braquages`/`ubuntu-drogue` déjà en ESX/ox reçoivent enfin les alertes police. **`esx_ambulancejob`
+> ACTIVÉ** (EMS : mort/réanimation/signal de détresse — à la mort le joueur voit le timer
+> respawn/bleedout et peut alerter les EMS) ; sa dépendance dure `esx_skin` est retirée par un
+> **override du fxmanifest** (`fivem-appearance` la remplace ; `skinchanger:*` du vestiaire = no-op
+> non fatal, comme la police). **Phase 3 = FAITE** : voix
+> `pma-voice`, téléphone **`z-phone`** (open-source ESX/ox, NUI pré-buildée — remplace npwd qui n'avait
+> pas de pin stable) et housing `esx_property`, tous `ensure`. ⚠️ La section « Couche RP QBCore » plus bas
+> est **HISTORIQUE**. ✅ **Pins vérifiés (`git ls-remote`), SQL importé et boot headless OK (10/10 ressources
+> `Started`, 0 erreur) ; reste le test en jeu (achats/appels/housing) avec un client.** Détail : `CHANGELOG.md`.
 
 Documents de référence à la racine :
 - [`vision_global.md`](vision_global.md) — vision produit (roadmap RP en phases).
@@ -76,7 +82,7 @@ Services sur le réseau `fivem-net` ([`docker-compose.yml`](docker-compose.yml))
 - Le Dockerfile fait `userdel -r ubuntu` avant de créer l'utilisateur `fivem` (uid 1000) : l'image
   `ubuntu:24.04` livre déjà un user en uid 1000.
 
-## Couche RP ESX (Phases 1 & 2 FAITES, fait autorité)
+## Couche RP ESX (Phases 1, 2 & 3 FAITES, fait autorité)
 
 Stack cible : **ESX Legacy** (`es_extended`) + **ox** (`ox_lib` remplace qb-menu/qb-input + fournit
 callbacks/context/notify, `ox_inventory` remplace qb-inventory/qb-weapons, `ox_target` remplace
@@ -94,25 +100,42 @@ importé à la place de qbcore.sql ; `import_custom_sql` importe le SQL des `ubu
 ⚠️ **Pins ESX à confirmer en live** (posés sans réseau — cf. en-tête du script). **Aucun override**
 n'est nécessaire en Phase 1 (défauts ESX). Ordre des `ensure` : [`config/server.cfg.template`](config/server.cfg.template).
 
+**Placement PNJ/marqueurs — cale-sol runtime (déjà câblé, ne pas re-dériver) :** toutes les ressources
+maison qui posent un PNJ + un marqueur `[E]` (`ubuntu-location`/`garage`/`banque`/`academie`/`mairie`/
+`premium`/`drogue` — et le marqueur seul des cibles `ubuntu-braquages`) partagent un helper local
+**`groundSnap(rec, x, y, z)`** dans leur `client.lua`. À l'approche du joueur (map streamée →
+`GetGroundZFor_3dCoord` fiable) il **repose PNJ + marqueur sur le sol réel** et met le résultat en cache
+sur la table du point (`rec.__gz`, PNJ mémorisé dans `rec.__ped`). Garde-fous : ignore un sol < 0.5 m ou
+un écart > 12 m (repli = Z de config) → **jamais** de PNJ téléporté au niveau de la mer. C'est ce qui
+corrige les points **flottants/enterrés** dus à un `Z` de config approximatif (le Z exact ne peut pas
+être raycasté en headless). ⚠️ Un point *dans un mur* (mauvais **XY**, pas seulement Z) reste à
+relocaliser à la main (coords à relever en jeu). Ajouter un point ⇒ garder le motif création (`rec.__ped
+= ped`) + marqueur (`baseZ = (groundSnap(rec, …) or (z - 1.0)) + 0.02`).
+
 **Ressources maison portées (ESX/ox)** — toutes en `local ESX = exports['es_extended']:getSharedObject()`,
 callbacks/notify via `ox_lib` (`lib.callback`, `lib.registerContext`, `lib.notify` / `ox_lib:notify`),
 i18n via un **shim `locales/locale.lua`** (reproduit `Lang:t('a.b', {var})` avec `%{var}`, lit `Locales`
 depuis fr.lua/en.lua) :
 - **`ubuntu-premium`** : boutique de dons « **Points** » (plus « Kubi »). Points stockés dans une
   **table propre** `ubuntu_premium_data(identifier, points, data)` (ESX n'a pas de metadata) —
-  **pas de compte ESX**. Crédit par **`/addpoints`** + export **`AddPoints`**. **Livraison des achats
-  (corrigée, ne pas re-dériver)** : véhicules → INSERT `owned_vehicles` (schéma ESX) **+ spawn immédiat**
-  côté client (`client:spawnVehicle`, devant le joueur) car **aucun garage n'existe** encore. Tenues →
-  **skin complet stocké** dans `data.outfits` (pas seulement le nom) + `data.lastOutfit` ; re-portables
-  à volonté via **`/tenues`** (menu `lib.registerContext`, callback `getOutfits`) et **ré-appliquées au
-  (re)spawn** ; l'application native est la fonction locale `applyOutfit` (client). VIP → `data.aceGroup`
-  mémorisé et principal ace **ré-appliqué à chaque `esx:playerLoaded`** (durable across reconnexions).
-  Perks confort → lisibles par d'autres ressources via exports **`GetPerks`/`GetRank`/`GetPremiumData`**
-  (inertes tant qu'aucun garage/garde-robe ne les consomme). Aucun changement SQL (tout dans la colonne
-  `data`).
+  **pas de compte ESX**. Crédit par **`/addpoints`** + export **`AddPoints`**. Catalogue **data-driven**
+  (`Config.Catalog`, catégories starter/vehicle/cosmetic/item/rank/perk), NUI icônes **par catégorie**
+  (SVG dans `html/app.js`). **Livraison des achats (corrigée, ne pas re-dériver)** : véhicules → INSERT
+  `owned_vehicles` **`stored=1`** (`{model,plate}`, mods neutres) → **récupérables au garage** (`ubuntu-garage`),
+  **plus de spawn immédiat**. Objets (`type='item'`, `payload.items`) → `exports.ox_inventory:AddItem`
+  (**refund/notif si plein**, `fxmanifest` dépend d'`ox_inventory`) ; items premium QoL enregistrés
+  (`premium_snack/drink/coffee/giftbox`, cf. `append_ox_items`). Packs mixtes (`type='bundle'`) =
+  véhicule + tenue + objets. Tenues → **skin complet stocké** dans `data.outfits` + `data.lastOutfit` ;
+  re-portables via **`/tenues`** (`getOutfits`) et **ré-appliquées au (re)spawn** (fonction locale
+  `applyOutfit`). VIP (`vip`/`vip_plus`/`vip_ultimate`) → `data.aceGroup` mémorisé et principal ace
+  **ré-appliqué à chaque `esx:playerLoaded`**. Perks → exports **`GetPerks`/`GetRank`/`GetPremiumData`**.
+  Aucun changement SQL (tout dans la colonne `data` + `owned_vehicles`).
 - **`ubuntu-admin`** : panel staff gaté par **groupe ESX** (`xPlayer.getGroup()` ∈ admin/superadmin/mod),
   `ESX.GetExtendedPlayers`/`setJob`/comptes ; **table `bans` propre** (`bans.sql`) + check `playerConnecting`.
-  Bouton « Points » → `exports['ubuntu-premium']:AddPoints`.
+  Bouton « Points » → `exports['ubuntu-premium']:AddPoints`. **Action `weaponlicense`** (bouton « Permis
+  arme » Accorder/Retirer) : écrit dans la table ESX `user_licenses` (`type='weapon'`, `owner=xPlayer.identifier`,
+  `INSERT` idempotent / `DELETE`) → débloque l'achat des armes à feu gatées `license='weapon'` par ox_inventory
+  (bridge ESX teste juste l'existence de la ligne). Aucun SQL propre (table `user_licenses` déjà dans `esx-base.sql`).
 - **`ubuntu-interface`** : menu F1 via `lib.registerContext`, `isStaff` via groupe ESX (`lib.callback`),
   init sur `esx:playerLoaded`, blips **génériques** (sans noms camerounais). **Solde du menu pause
   (déjà câblé, ne pas re-dériver)** : ESX ne synchronise pas les stats natives GTA du menu pause →
@@ -125,6 +148,19 @@ depuis fr.lua/en.lua) :
   « solde à 0 » était **purement un défaut d'affichage**.
 - **`ubuntu-location`** : compte `money`, menu `lib.registerContext`, points **génériques**. Clés véhicule
   = brancher un export de ressource de clés ESX si présente (sinon conduite libre).
+- **`ubuntu-garage`** : **garage personnel** (aucun n'existait — `esx_property` = par maison sans export
+  d'injection, `esx_vehicleshop` = véhicules de métier). **100 % serveur-authoritative** : le client
+  envoie une plaque/intention, le serveur valide la possession dans **`owned_vehicles`** puis pilote
+  **Sortir** (`ESX.OneSync.SpawnVehicle` au point du garage + `stored=0`, warp client) / **Ranger**
+  (`stored=1` + suppression de l'entité côté client). Menu `lib.registerContext`, points data-driven
+  (`Config.Garages`, PNJ+blip+E). C'est la **cible de livraison des véhicules premium** (`stored=1`).
+  **Clés / anti-vol** : touche `Config.Keys.key` (défaut **U**) verrouille/déverrouille un véhicule
+  **possédé** (`owned_vehicles`) — verrou porté par un **statebag d'entité** `ubuntuLock` (réplicable,
+  résiste au streaming ; handler client → `SetVehicleDoorsLocked` 2/1) ; le serveur valide la possession
+  et bascule le statebag (jamais de confiance client sur la propriété). **GPS** : le serveur suit les
+  netId des véhicules sortis (`Spawned`, alimenté au spawn garage + à l'entrée d'un véhicule possédé) et
+  renvoie leurs positions (OneSync) ; le client entretient un **blip par véhicule sorti** (`Config.Gps`).
+  Aucun SQL propre. `ensure` après `ubuntu-banque`.
 - **`ubuntu-banque`** : **banque ESX** (aucune n'existait). **100 % serveur-authoritative** — le client
   n'envoie qu'un montant/une cible, le serveur revalide tout et applique l'argent via l'API ESX
   (`xPlayer.getAccount`/`addAccountMoney`/`removeAccountMoney`) → cash ox_inventory + compte `bank` restent
@@ -138,14 +174,68 @@ depuis fr.lua/en.lua) :
   (dépend de `ox_target`). Les 2 blips « Banque » ont été **retirés d'`ubuntu-interface`** (doublon).
   Ajouter un guichet/ATM = 1 entrée dans `Config.Tellers`/`Config.Atm`.
 - **`ubuntu-antichute`** : écoute `esx:playerLoaded`/`playerSpawned` + **ferme le loadscreen**
-  (`ShutdownLoadingScreenNui`, plus de multichar pour le faire).
-- **`ubuntu-loadscreen`** : dé-thématisé (accent indigo, sans drapeau/FCFA/MoMo).
+  (`ShutdownLoadingScreenNui`, plus de multichar pour le faire). ⚠️ Le shutdown est appelé **à la FIN
+  du grounding** (collision chargée, joueur posé au sol — borné par le garde-fou 20 s), **jamais** dès
+  `esx:playerLoaded`/`playerSpawned` : ces events précèdent le streaming de la map, donc fermer le
+  loadscreen à ce moment exposerait le monde encore noir pendant tout le chargement (bug « écran noir
+  pendant le chargement », corrigé en 2.7.1). Fondu anti-flash `DoScreenFadeOut(0)`→`ShutdownLoadingScreenNui`→`DoScreenFadeIn`.
+- **`ubuntu-loadscreen`** : dé-thématisé (accent indigo, sans drapeau/FCFA/MoMo). ⚠️ Les directives
+  loadscreen (`loadscreen`, `loadscreen_manual_shutdown 'yes'`, `loadscreen_cursor 'yes'`) vivent dans
+  **son `fxmanifest.lua`** — elles n'ont **aucun effet dans `server.cfg`** (doc Cfx.re) ; le HTML
+  (`html/index.html`) doit aussi être listé dans `files{}` pour être servi au client (sinon écran noir).
+  Le loadscreen est fermé par `ubuntu-antichute` (`ShutdownLoadingScreenNui`) à la fin du grounding.
+- **`ubuntu-academie`** : **centre d'accueil / académie RP** (aucun onboarding n'existait). PNJ
+  « formateur » + blip au centre-ville ; interaction `[E]` → menu **`lib.registerContext`** de tutoriels
+  affichés en **markdown** dans `lib.alertDialog` (welcome / trouver un travail / illégal / acheter
+  voiture / acheter maison / lancer un business). **100 % data-driven** (`Config.Points` + `Config.Tutorials`,
+  textes dans `locales/fr.lua`+`en.lua`). **Onboarding** : à la 1re connexion (identifier absent de la table
+  **`ubuntu_academy_seen`**, SQL propre `academy.sql`), le serveur (`esx:playerLoaded`) notifie le joueur +
+  pose un **itinéraire GPS** vers l'académie ; il est marqué « vu » à l'ouverture du menu (`server:markSeen`,
+  `INSERT IGNORE`). Logique serveur minimale (aucune donnée sensible). `ensure` après `ubuntu-interface`.
+  Ajouter un tutoriel = 1 entrée `Config.Tutorials` + son texte ; ajouter un point = 1 entrée `Config.Points`.
+- **`ubuntu-mairie`** : **mairie / centre pour l'emploi** (aucun point d'accès aux métiers n'existait —
+  la « mairie » n'était qu'un blip décoratif ; seul `/admin` pouvait assigner un job → **impossible de
+  devenir policier/EMS en jeu**). PNJ « agent municipal » + blip + marqueur `[E]` à l'Hôtel de ville
+  (Legion Square), menu **`lib.registerContext`** pour **prendre** (`Config.Jobs` : police/ambulance/
+  cardealer…) ou **quitter** un métier (→ `unemployed`). **100 % serveur-authoritative** : le client
+  n'envoie qu'un nom de métier, le serveur (`server.lua`) revalide contre `Config.Jobs` + la garde
+  `restricted` (staff via `Config.StaffGroups`, mêmes groupes qu'`ubuntu-admin`) avant `xPlayer.setJob()` ;
+  état courant récupéré via **`lib.callback` `ubuntu-mairie:getState`**. Data-driven (ajouter un métier =
+  1 entrée `Config.Jobs` + libellé `jobs.<name>` en fr/en). **Aucun SQL propre** (ESX persiste le job dans
+  `users`). `ensure` après `ubuntu-academie` ; **blip Mairie retiré d'`ubuntu-interface`** (doublon, cf. banque).
 
-**Phase 2 (métiers + illégal) — FAITE :**
-- **Métiers ESX** : `esx_addonaccount` + `esx_society` (comptes société) et `esx_policejob` +
-  `esx_ambulancejob` ajoutés au `RESOURCES` et `ensure` (leurs jobs viennent de leur propre SQL,
-  importé par le scan générique). Métiers additionnels (mécano/trucker/taxi/garbage : dépôts ESX
-  historiques) laissés **commentés** dans `RESOURCES` + template (refs à confirmer).
+**Niveau de recherche (étoiles) — override es_extended :** ESX Legacy livre `Config.EnableWantedLevel =
+false` (`shared/config/adjustments.lua`), qui appelle `SetMaxWantedLevel(0)` au spawn → **aucune étoile**
+pour un crime. **Override** [`overrides/es_extended/shared/config/adjustments.lua`](overrides/) (fichier
+complet, copié par `apply_overrides`) passe le flag à **`true`** → les étoiles réapparaissent pour les
+crimes visibles. `DisableDispatchServices = true` reste actif (étoiles visibles, pas de dispatch PNJ massif).
+⚠️ Ré-aligner cet override si le pin d'`es_extended` (monorepo `esx_core`) change le fichier amont.
+
+**Phase 2 (métier POLICE + illégal) — FAITE :**
+- **Métiers ESX** : sourcés du **monorepo `esx-framework/ESX-Legacy-Addons`** (aplati sélectivement par
+  **`install_esx_addons`** dans `data/resources/[esx_addons]/`, pin = SHA de `main`). Set = clôture des
+  dépendances d'`esx_policejob` : `esx_addonaccount`, `esx_datastore`, `esx_society` (→ `cron`, déjà dans
+  esx_core), `esx_billing`, `esx_vehicleshop`, `esx_policejob`, **`esx_ambulancejob`**. ⚠️ **NE PAS aplatir
+  tout `[esx_addons]`** (esx_banking/esx_shops/esx_jobs/… entreraient en conflit avec `ubuntu-banque` + jobs
+  par défaut). Jobs + grades viennent de leur propre SQL : le **scan de `import_sql` est désormais rejoué à
+  chaque `make resources`** (non-fatal, idempotent), séparé du schéma de base `legacy.sql` (une fois, marqueur
+  `data/.esx-sql-imported`, `--force` tolérant). **Le garde d'idempotence d'`install_esx_addons` vérifie
+  désormais que TOUS les dossiers de `${ESX_ADDONS[@]}` sont présents** (pas seulement le `.pin`) → **ajouter
+  un addon re-déclenche le clone même à pin inchangé** ; côté SQL le scan rejoué suffit (pas de marqueur à
+  supprimer). `ensure cron` requis par `esx_society`.
+- **`esx_ambulancejob` (EMS — mort / réanimation / détresse) — ACTIVÉ.** C'est ce qui fait qu'à la mort le
+  joueur voit le **timer de respawn/bleedout** (`Config.EarlyRespawnTimer` 60 s / `Config.BleedoutTimer` 10 min)
+  et peut **alerter les EMS en service** (signal de détresse + blip). Sa **dépendance dure `esx_skin`** (retiré
+  au profit de `fivem-appearance`) est **retirée par un override** `overrides/esx_ambulancejob/fxmanifest.lua`
+  (copie du manifest sans la ligne `esx_skin`) — sinon la ressource refuse de démarrer. **`fivem-appearance`
+  fournit la compat `esx_skin` complète** (events client `skinchanger:getSkin/loadSkin/loadClothes/
+  loadDefaultModel` **+** callback serveur `esx_skin:getPlayerSkin`), donc les appels runtime du vestiaire EMS
+  sont **réellement pris en charge** (pas des no-op) — le spawn/apparence n'est pas affecté. Items de soin
+  `bandage`/`medikit` : **déjà présents** dans `ox_inventory/data/items.lua` (aucun ajout). SQL
+  `esx_ambulancejob.sql` (job/grades `ambulance`, `society_ambulance`, colonne `users.is_dead`) importé par le
+  scan générique. `ensure` **après `esx_policejob`** dans le template. Seule limite (non fatale, sans rapport
+  avec mort/réanimation) : le callback de fivem-appearance renvoie `cb(appearance)` (1 arg) alors que le
+  vestiaire attend `(skin, jobSkin)` → l'**uniforme de métier EMS** ne s'applique pas complètement.
 - **`ubuntu-braquages`** & **`ubuntu-drogue`** portés ESX/ox (mêmes patrons) : police en service via
   `ESX.GetExtendedPlayers` + `xPlayer.job.name == 'police'` (+ `job.onDuty ~= false`), butin/argent
   sur le compte `money`, items via **ox_inventory** (`GetItem`/`RemoveItem`/`AddItem`), barre de
@@ -155,10 +245,49 @@ depuis fr.lua/en.lua) :
   **ajoute** `joint`/`xtcbaggy`/`crack_baggy`/`coke_baggy`/`electronickit`/`thermite` juste après le
   `return {` de `ox_inventory/data/items.lua` (sans remplacer le fichier).
 
-**Phase 3 — STAGÉE (désactivée) :** téléphone **npwd** (+ pma-voice) et **housing** (loaf_housing/
-esx_property) câblés en **blocs commentés** dans `install-resources.sh` (section Phase 3) et
-`config/server.cfg.template` — à préparer + `ensure` après validation en jeu. HUD/météo = défauts
-ESX/ox suffisants (polish optionnel).
+**Phase 3 — FAITE :** voix **`pma-voice`** (`v7.0.0`, mumble natif OneSync), téléphone **`z-phone`**
+(`v3.0.0`, `alfaben12/z-phone` — open-source ESX/ox, deps `oxmysql`+`ox_lib`, NUI **pré-buildée** donc
+aucun build node ; **remplace npwd** qui n'avait pas de tag stable épinglable) et **housing `esx_property`**
+(même monorepo `[esx_addons]`). Tous trois `ensure` dans le template. `z-phone` est forcé en `Config.Core=ESX`
+par **`configure_zphone`** (le dépôt est en QBX par défaut) ; son `z-phone.sql` + le SQL housing sont importés
+par le scan générique. **Accès** : touche **M** (`Config.OpenPhone`, rebindable) / `/phone`. z-phone **exige
+l'item `phone`** (callback serveur `z-phone:server:HasPhone`) → **`append_phone_to_shop`** (idempotent) ajoute
+`phone` à la boutique `General` (supérettes 24/7) d'ox_inventory à **10 000 $** (même patron qu'`append_ox_items`).
+HUD/météo = défauts ESX/ox suffisants (polish optionnel).
+
+**Arsenal armurerie (ox_inventory `Ammunation`)** : par défaut l'armurerie civile ne vend que
+couteau/batte/pistolet. **`append_weapons_to_ammunation`** (`install-resources.sh`, idempotent, marqueur
+`UBUNTU-RP arsenal`, même patron qu'`append_phone_to_shop`) y **AJOUTE** l'arsenal **standard sans explosifs**
+(armes blanches libres + pistolets/SMG/fusils/pompes/snipers gatés `license='weapon'` + munitions). Le permis
+`weapon` s'accorde via l'action `weaponlicense` d'`ubuntu-admin`. **Ajouter/retirer une arme vendue** = 1 ligne
+dans le `block` de cette fonction (noms d'items = clés de `ox_inventory/data/weapons.lua`).
+- **Armes vendues pré-chargées** : chaque arme à feu porte `metadata = { registered = true, ammo = 250 }`
+  → utilisable **dès l'achat** sans rechargement (ox_inventory lit `metadata.ammo` à l'équipement,
+  `modules/weapon/client.lua`). Chaque arme exige un **type de munition précis** (`ammoname` dans
+  `weapons.lua`, ex. `WEAPON_ASSAULTRIFLE` → `ammo-rifle2`, pas `ammo-rifle`) : le rayon vend toutes les
+  munitions couvrant les armes proposées. Ajouter une arme = vérifier que son `ammoname` est en rayon.
+- **Rechargement depuis l'inventaire** : `setr inventory:autoreload true` (`server.cfg.template`) — défaut
+  ox = `false`, sinon une arme **déjà achetée et vide** reste vide malgré des munitions en poche. Activé =
+  rechargement **auto** quand le chargeur se vide (sinon touche **R**, arme en main). Les armes achetées
+  ont `durability = 100` (`Items.Metadata`) → rechargement jamais bloqué (`client.lua:561/853` gardent
+  `durability > 0`).
+
+**Pharmacie publique (ox_inventory)** : la seule pharmacie d'origine (`esx_ambulancejob`) et le shop
+`Medicine` d'ox_inventory sont **gatés job `ambulance`** → aucun civil ne peut se soigner. On AJOUTE
+un shop **public** `Pharmacie` (**sans `groups`**, blip + ciblage ox_target) vendant `bandage` (250 $)
+et `medikit` (1500 $, seuls items médicaux présents dans `ox_inventory/data/items.lua`) via
+**`append_pharmacy_shop`** (`install-resources.sh`, idempotent, marqueur `UBUNTU-RP pharmacie`, même
+patron qu'`append_phone_to_shop` — injecté après le `return {` de `shops.lua`). Le shop EMS `Medicine`
+reste inchangé. Ajouter un point de vente / changer un prix = éditer le `block` de la fonction (coords
+à affiner en jeu).
+
+**Intérieur d'hôpital (MLO `PillboxHospital`)** : le serveur utilisait la coquille **Pillbox vanilla**
+(pas d'intérieur jouable). Clone épinglé `[standalone]|PillboxHospital` (`jobscraft/PillboxHospital-by-Jobscraft`,
+map streamée) dans `RESOURCES` + `ensure PillboxHospital` (avant `esx_ambulancejob`) dans le template.
+Il **remplace/nettoie la coquille vanilla** → **toutes les coords `esx_ambulancejob`** (blip, pharmacie
+EMS, vestiaire, spawns, `RespawnPoints`, fast-travels) **restent valides** (amélioration visuelle
+drop-in). Épinglé sur `master` (pas de tag amont, **noter le SHA en live**) ; **licence non explicite**
+→ à vérifier avant usage public (alternative gratuite : `evgenius33/Pillbox-Hospital-Interior`).
 
 **Ajouter un article premium** = 1 entrée `Config.Catalog`. **Ajouter un point de menu/blip/location/
 cible/zone** = 1 entrée dans le `config.lua` concerné (data-driven). **Ajouter un item drogue/braquage**

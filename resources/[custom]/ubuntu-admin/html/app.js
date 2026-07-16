@@ -57,6 +57,7 @@
                     <button class="chip" data-a="money">Argent</button>
                     <button class="chip" data-a="setjob">Job</button>
                     <button class="chip" data-a="addpoints">Points</button>
+                    <button class="chip" data-a="weaponlicense">Permis arme</button>
                     <button class="chip danger" data-a="kick">Kick</button>
                     <button class="chip danger" data-a="ban">Ban</button>
                 </div></td>`;
@@ -97,6 +98,10 @@
                 openModal('Créditer des Points — ' + p.name, [
                     { key: 'amount', label: 'Montant (Points)', type: 'number', value: '1000' },
                 ], (v) => sendAction('addpoints', p.id, { amount: Number(v.amount) })); break;
+            case 'weaponlicense':
+                openModal('Permis d\'arme — ' + p.name, [
+                    { key: 'grant', label: 'Action', type: 'select', options: ['Accorder', 'Retirer'] },
+                ], (v) => sendAction('weaponlicense', p.id, { grant: v.grant === 'Accorder' })); break;
             case 'setjob':
                 openModal('Métier — ' + p.name, [
                     { key: 'jobName', label: 'Métier', type: 'select', options: Object.keys(jobs).sort() },

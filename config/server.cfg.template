@@ -40,6 +40,10 @@ sv_endpointprivacy true
 setr esx:locale "fr"
 setr ox:locale "fr"
 sets locale "fr-FR"
+# ox_inventory : rechargement AUTOMATIQUE des armes depuis les munitions de
+# l'inventaire quand le chargeur se vide (défaut ox = false → arme reste vide même
+# avec des munitions en poche). Complète les armes vendues pré-chargées à l'armurerie.
+setr inventory:autoreload true
 # Chat système (requis par la recette esx_core).
 set resources_useSystemChat true
 # Webhook Discord pour les logs/notifications de scripts (vide = désactivé).
@@ -55,10 +59,11 @@ add_ace resource.es_extended command.remove_principal allow
 
 # --- Ressources (installées par `make resources` ; nos ressources custom viennent
 # du dépôt via resources/[custom]). esx_identity/esx_menu_* proviennent du monorepo
-# esx_core ; l'apparence est illenium-appearance. `manual_shutdown` = le loadscreen reste
-# affiché jusqu'à ShutdownLoadingScreenNui(), appelé par ubuntu-antichute au spawn
-# (esx:playerLoaded / playerSpawned) — en mono-perso il n'y a plus de multichar.
-loadscreen_manual_shutdown 'yes'
+# esx_core ; l'apparence est illenium-appearance.
+# NB : le loadscreen (`loadscreen`, `loadscreen_manual_shutdown`, `loadscreen_cursor`) est
+# configuré dans le fxmanifest.lua de ubuntu-loadscreen — ces directives n'ont AUCUN effet
+# dans server.cfg (doc Cfx.re). Le loadscreen reste affiché jusqu'à ShutdownLoadingScreenNui(),
+# appelé par ubuntu-antichute à la fin du grounding (map/collision prête).
 ensure ubuntu-loadscreen
 
 # --- Ressources système FiveM ---
@@ -101,6 +106,9 @@ ensure PolyZone
 ensure interact-sound
 ensure rpemotes-reborn
 ensure LegacyFuel
+# MLO intérieur d'hôpital Pillbox (map streamée) : remplace la coquille vanilla, les
+# coords ESX (esx_ambulancejob) restent valides. Chargé avant esx_ambulancejob.
+ensure PillboxHospital
 
 # --- Anti-chute au spawn (gèle le joueur tant que la collision n'est pas chargée) ---
 ensure ubuntu-antichute
@@ -109,24 +117,40 @@ ensure ubuntu-antichute
 ensure ubuntu-location
 # Banque (guichets + ATM) : dépôt/retrait/virement via l'API ESX (ox_target requis).
 ensure ubuntu-banque
+# Garage personnel : sortir/ranger les véhicules possédés (owned_vehicles).
+ensure ubuntu-garage
 # ubuntu-premium (boutique de dons) avant ubuntu-admin (export AddPoints).
 ensure ubuntu-premium
 ensure ubuntu-admin
 ensure ubuntu-interface
+# Académie / centre d'accueil : PNJ + tutoriels RP, notifie les nouveaux joueurs.
+ensure ubuntu-academie
+# Mairie / centre pour l'emploi : PNJ + menu ox_lib pour prendre/quitter un métier
+# (police, EMS, concession...). Sans lui, seul /admin pouvait assigner un job.
+ensure ubuntu-mairie
 # Braquages + trafic (utilisent ox_inventory ; alerte le job 'police' quand il existe).
 ensure ubuntu-braquages
 ensure ubuntu-drogue
 
-# --- PHASE 2 (métiers ESX police/ambulance/…) — sources à confirmer (les dépôts
-#     esx-framework/esx_* séparés n'existent plus). Ajouter au RESOURCES du script
-#     puis décommenter. Sans eux, braquages/drogue tournent sans alerte police.
-# ensure esx_addonaccount
-# ensure esx_society
-# ensure esx_policejob
-# ensure esx_ambulancejob
+# --- PHASE 2 (métier ESX POLICE) — monorepo esx-framework/ESX-Legacy-Addons -----
+# Installés sélectivement par install_esx_addons. Ordre : comptes/société AVANT les
+# jobs (clôture de dépendances d'esx_policejob : esx_billing + esx_vehicleshop).
+# cron (dans esx_core) est requis par esx_society.
+ensure cron
+ensure esx_addonaccount
+ensure esx_datastore
+ensure esx_society
+ensure esx_billing
+ensure esx_vehicleshop
+ensure esx_policejob
+# EMS : mort / réanimation / signal de détresse. Sa dépendance dure esx_skin est
+# retirée par un override (fivem-appearance la remplace ; skinchanger:* du vestiaire
+# = no-op non fatal). À la mort, le joueur voit le timer de respawn/bleedout et peut
+# alerter les EMS en service. `is_dead` (colonne users) importé par esx_ambulancejob.sql.
+ensure esx_ambulancejob
 
-# --- PHASE 3 (optionnel, DÉSACTIVÉ) : téléphone (npwd + pma-voice) + housing -----
-# Préparer via le bloc Phase 3 de scripts/install-resources.sh puis décommenter ici.
-# ensure pma-voice
-# ensure npwd
-# ensure loaf_housing
+# --- PHASE 3 : voix + téléphone (z-phone, ESX/ox) + housing (esx_property) -------
+# npwd remplacé par z-phone (open-source ESX/ox, NUI pré-buildée, tag épinglable).
+ensure pma-voice
+ensure z-phone
+ensure esx_property

@@ -29,3 +29,14 @@ Gardez **exactement les mêmes noms de fichiers** puis rechargez le serveur
 L'icône du navigateur de serveurs n'est **pas** ici : c'est `config/server-icon.png` (PNG **96×96**,
 même logo), activée par `load_server_icon "/opt/fivem/config/server-icon.png"` dans
 `config/server.cfg.template`.
+
+## Régénérer tous les logos d'un coup
+
+Le logo source carré est versionné dans **`config/logo-source.png`**. Pour régénérer toutes les
+tailles (loadscreen 512×512, wiki 560×560, icône serveur 96×96) depuis cette source :
+
+```bash
+python scripts/gen-logos.py config/logo-source.png .
+```
+
+Remplacer le logo du serveur = remplacer `config/logo-source.png` puis relancer cette commande.

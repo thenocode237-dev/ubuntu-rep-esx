@@ -78,35 +78,8 @@ AddEventHandler('esx:playerLoaded', function()
     end)
 end)
 
--- --- Livraison immédiate d'un véhicule acheté (poussé par le serveur) --------
-RegisterNetEvent('ubuntu-premium:client:spawnVehicle', function(data)
-    if not data or not data.model then return end
-    local model = GetHashKey(data.model)
-    RequestModel(model)
-    local timeout = 0
-    while not HasModelLoaded(model) and timeout < 100 do Wait(50); timeout = timeout + 1 end
-    if not HasModelLoaded(model) then
-        return lib.notify({ description = Lang:t('vehicle.spawn_failed'), type = 'error' })
-    end
-
-    local ped = PlayerPedId()
-    local pc = GetEntityCoords(ped)
-    local heading = GetEntityHeading(ped)
-    -- Apparition devant le joueur.
-    local fwd = GetEntityForwardVector(ped)
-    local sx, sy = pc.x + fwd.x * 4.0, pc.y + fwd.y * 4.0
-    local veh = CreateVehicle(model, sx, sy, pc.z, heading, true, false)
-    while not DoesEntityExist(veh) do Wait(10) end
-    SetVehicleNumberPlateText(veh, data.plate)
-    SetEntityAsMissionEntity(veh, true, true)
-    SetVehicleHasBeenOwnedByPlayer(veh, true)
-    SetVehicleFuelLevel(veh, 100.0)
-    SetVehicleDirtLevel(veh, 0.0)
-    SetVehicleOnGroundProperly(veh)
-    SetModelAsNoLongerNeeded(model)
-    -- Pas de ressource de clés ESX en place → conduite libre (comme ubuntu-location).
-    lib.notify({ description = Lang:t('vehicle.delivered', { plate = data.plate }), type = 'success' })
-end)
+-- Les véhicules achetés sont désormais livrés dans le garage (owned_vehicles,
+-- stored=1) et récupérés via ubuntu-garage — plus de spawn immédiat ici.
 
 -- --- Ouverture / fermeture de la boutique (NUI) -----------------------------
 
@@ -174,7 +147,25 @@ CreateThread(function()
     SetEntityInvincible(shopPed, true)
     SetBlockingOfNonTemporaryEvents(shopPed, true)
     SetModelAsNoLongerNeeded(model)
+    Config.Shop.__ped = shopPed
 end)
+
+-- Cale le PNJ + le marqueur sur le sol réel dès que le joueur est assez proche
+-- pour que la map soit streamée (GetGroundZ fiable). Évite un PNJ/marqueur
+-- flottant ou enterré quand le Z de la config n'est pas exact. Idempotent
+-- (résultat mis en cache) et prudent : on ne déplace jamais le PNJ vers le niveau
+-- de la mer si le sol n'est pas trouvé, ni de plus de 12 m.
+local function groundSnap(rec, x, y, z)
+    if rec.__gz then return rec.__gz end
+    local ok, gz = GetGroundZFor_3dCoord(x + 0.0, y + 0.0, z + 3.0, false)
+    if ok and gz > 0.5 and math.abs(gz - z) < 12.0 then
+        rec.__gz = gz
+        if rec.__ped and DoesEntityExist(rec.__ped) then
+            SetEntityCoords(rec.__ped, x, y, gz, false, false, false, false)
+        end
+    end
+    return rec.__gz
+end
 
 -- Interaction de proximité.
 CreateThread(function()
@@ -186,7 +177,8 @@ CreateThread(function()
         if dist < 15.0 then
             sleep = 0
             local c = Config.Shop.markerColor
-            DrawMarker(1, shopVec.x, shopVec.y, shopVec.z - 0.98, 0, 0, 0, 0, 0, 0, 1.2, 1.2, 0.5, c.r, c.g, c.b, 120, false, false, 2, false)
+            local baseZ = (groundSnap(Config.Shop, shopVec.x, shopVec.y, shopVec.z) or (shopVec.z - 1.0)) + 0.02
+            DrawMarker(1, shopVec.x, shopVec.y, baseZ, 0, 0, 0, 0, 0, 0, 1.2, 1.2, 0.5, c.r, c.g, c.b, 120, false, false, 2, false)
             if dist < 1.6 then
                 DrawText3D(shopVec.x, shopVec.y, shopVec.z, Lang:t('misc.open_prompt'))
                 if IsControlJustReleased(0, 38) then -- E

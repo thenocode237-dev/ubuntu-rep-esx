@@ -134,6 +134,34 @@ RegisterCommand(Config.MainMenu.command, function() openMainMenu() end, false)
 RegisterKeyMapping(Config.MainMenu.command, 'Ouvrir le menu principal', 'keyboard', Config.MainMenu.key)
 
 -- =============================================================================
+-- 4) Roue de sélection d'arme à la molette de la souris.
+--    Par défaut GTA fait défiler l'arme directement à la molette (contrôles
+--    14/15) et n'ouvre la roue qu'en maintenant TAB (contrôle 37). Ici, un coup
+--    de molette ouvre la roue et la garde affichée le temps de choisir : tant
+--    que le minuteur court, on maintient le contrôle 37 « enfoncé » (équivaut à
+--    garder TAB), et les crans de molette naviguent alors dans la roue.
+-- =============================================================================
+local INPUT_SELECT_WEAPON     = 37  -- ouvre / maintient la roue
+local INPUT_WEAPON_WHEEL_NEXT = 14  -- molette bas
+local INPUT_WEAPON_WHEEL_PREV = 15  -- molette haut
+
+CreateThread(function()
+    if not Config.WeaponWheel or not Config.WeaponWheel.enabled then return end
+    local openMs = Config.WeaponWheel.openMs or 1500
+    local holdUntil = 0
+    while true do
+        Wait(0)
+        if IsControlJustPressed(0, INPUT_WEAPON_WHEEL_NEXT)
+            or IsControlJustPressed(0, INPUT_WEAPON_WHEEL_PREV) then
+            holdUntil = GetGameTimer() + openMs
+        end
+        if GetGameTimer() < holdUntil then
+            SetControlNormal(0, INPUT_SELECT_WEAPON, 1.0)
+        end
+    end
+end)
+
+-- =============================================================================
 -- Initialisation (au chargement du joueur + au (re)démarrage de la ressource).
 -- =============================================================================
 local function refreshStaff()

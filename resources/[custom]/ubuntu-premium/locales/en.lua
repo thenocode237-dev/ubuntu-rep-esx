@@ -7,6 +7,7 @@ Locales.en = {
         ['no_permission'] = 'You do not have permission',
         ['invalid_target'] = 'No player found with that id',
         ['invalid_amount'] = 'Invalid amount',
+        ['inventory_full'] = 'Inventory full: items not delivered',
     },
     success = {
         ['purchased'] = 'Purchase complete: %{label} (-%{cost})',

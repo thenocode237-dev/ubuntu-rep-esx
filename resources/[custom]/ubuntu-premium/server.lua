@@ -79,21 +79,28 @@ local function generatePlate()
     return table.concat(plate)
 end
 
--- Ajoute un véhicule cosmétique aux véhicules possédés (récupérable dès qu'un
--- garage ESX lisant owned_vehicles sera présent) ET le livre immédiatement au
--- joueur (spawn côté client). Insert dans owned_vehicles (schéma ESX).
--- Mods NEUTRES (aucune performance).
+-- Livre un véhicule cosmétique DANS LE GARAGE : insert dans owned_vehicles avec
+-- stored=1 (récupérable via ubuntu-garage), même patron que esx_vehicleshop mais
+-- SANS spawn immédiat. Mods NEUTRES (aucune performance).
 local function grantVehicle(xPlayer, veh)
     local plate = generatePlate()
     local props = json.encode({ model = GetHashKey(veh.model), plate = plate })
     MySQL.insert.await(
         'INSERT INTO owned_vehicles (owner, plate, vehicle, type, stored) VALUES (?, ?, ?, ?, ?)',
-        { xPlayer.identifier, plate, props, veh.vtype or 'car', 0 })
-    -- Livraison immédiate : le véhicule apparaît à côté du joueur (stored=0 tant
-    -- qu'il est sorti ; un futur garage le remisera/ressortira via owned_vehicles).
-    TriggerClientEvent('ubuntu-premium:client:spawnVehicle', xPlayer.source,
-        { model = veh.model, plate = plate })
+        { xPlayer.identifier, plate, props, veh.vtype or 'car', 1 })
     return plate
+end
+
+-- Livre des objets dans l'inventaire ox_inventory (refund si l'inventaire est
+-- plein). payload.items = { { name = 'premium_snack', count = 3 }, ... }.
+local function grantItems(src, items)
+    for _, entry in ipairs(items or {}) do
+        local name, count = entry.name, entry.count or 1
+        if name and not exports.ox_inventory:AddItem(src, name, count) then
+            return false -- inventaire plein : l'appelant annule/rembourse
+        end
+    end
+    return true
 end
 
 -- Applique une tenue cosmétique au ped via natives GTA (côté client) ET stocke
@@ -190,10 +197,20 @@ RegisterNetEvent('ubuntu-premium:server:buy', function(itemId)
     if item.type == 'bundle' then
         if payload.vehicle then grantVehicle(xPlayer, payload.vehicle) end
         if payload.outfit then grantOutfit(src, payload.outfit, meta) end
+        -- Objets du pack : non bloquant (le reste du pack est déjà livré).
+        if payload.items and not grantItems(src, payload.items) then
+            notify(src, Lang:t('error.inventory_full'), 'error')
+        end
     elseif item.type == 'vehicle' then
         if payload.vehicle then grantVehicle(xPlayer, payload.vehicle) end
     elseif item.type == 'cosmetic' then
         if payload.outfit then grantOutfit(src, payload.outfit, meta) end
+    elseif item.type == 'item' then
+        -- Objets seuls : si l'inventaire est plein, on rembourse et on annule.
+        if not grantItems(src, payload.items) then
+            setPoints(identifier, getPoints(identifier) + item.cost)
+            return notify(src, Lang:t('error.inventory_full'), 'error')
+        end
     elseif item.type == 'rank' then
         grantRank(src, payload, meta)
     elseif item.type == 'perk' then
