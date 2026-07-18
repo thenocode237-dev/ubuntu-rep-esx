@@ -18,8 +18,10 @@ files {
     'html/style.css',
     'html/app.js',
     'html/assets/background.jpg',
-    'html/assets/music.mp3',
     'html/assets/logo.png',
+    -- Playlist musicale : tout le dossier musics/ (pistes + playlist.json généré
+    -- par generate_music_playlists dans scripts/install-resources.sh).
+    'html/musics/**',
 }
 
 lua54 'yes'

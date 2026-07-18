@@ -211,6 +211,42 @@ depuis fr.lua/en.lua) :
   état courant récupéré via **`lib.callback` `ubuntu-mairie:getState`**. Data-driven (ajouter un métier =
   1 entrée `Config.Jobs` + libellé `jobs.<name>` en fr/en). **Aucun SQL propre** (ESX persiste le job dans
   `users`). `ensure` après `ubuntu-academie` ; **blip Mairie retiré d'`ubuntu-interface`** (doublon, cf. banque).
+- **`ubuntu-boite`** : **boîte de nuit** (aucune vie nocturne n'existait). **Intérieur INCLUS sans MLO
+  externe** — réutilise la **discothèque native de GTA V** (DLC *After Hours*), toujours dans la map :
+  l'entrée extérieure (PNJ videur + blip + `[E]`, PNJ calé par `groundSnap`) **téléporte** vers les coords
+  fixes de l'intérieur (chargé/habillé via `LoadInterior`/`ActivateInteriorEntitySet`), une sortie `[E]`
+  ressort. **100 % serveur-authoritative** : cover charge (`Config.Entry.fee`) + achats de **bar** validés
+  côté serveur (vérifie cash **et** place d'inventaire **avant** de débiter → aucune perte d'argent), items
+  ajoutés via **ox_inventory**. Bar/DJ = zones **ox_target** ; le menu bar (`lib.registerContext`) vend des
+  boissons (`bière`/`cocktail`/`shooter`/`champagne`, injectées dans `ox_inventory/data/items.lua` par
+  **`append_club_items`**). **DJ / ambiance** : bascule `GlobalState.boiteMusic` (statebag répliqué) →
+  **NUI audio auto-contenue** (patron `ubuntu-loadscreen`) qui joue une **playlist** (`html/musics/`, voir
+  ci-dessous) en boucle pour tous les joueurs à l'intérieur — dégradation silencieuse si vide. Pas de
+  changement de piste manuel côté boîte (playlist en boucle). Société optionnelle (`Config.Society`,
+  **désactivée**) → revenu vers `society_boite`. `ensure` après `ubuntu-drogue`. Ajouter une boisson =
+  1 ligne dans `append_club_items` + 1 dans `Config.Bar.drinks`.
+
+**Playlists musicales (`ubuntu-boite` + `ubuntu-loadscreen`) — déjà câblé, ne pas re-dériver :** FiveM
+ne sait **pas lister un dossier au runtime** (ni en Lua, ni en NUI). Le scan « complet » du dossier
+`html/musics/` de chaque ressource se fait donc **à l'installation** : **`generate_music_playlists`**
+(`scripts/install-resources.sh`, pure bash, idempotent, régénéré à chaque `make resources`) scanne les
+`.mp3/.ogg/.wav`, **triés par nom** (= ordre de lecture), et écrit `html/musics/playlist.json` (tableau
+JSON). Le fxmanifest sert `html/musics/**` (glob). La **NUI** `fetch('musics/playlist.json')` puis enchaîne
+les pistes dans l'ordre et **boucle** (passe à la suivante sur `ended`, saute une piste illisible). Le
+**loadscreen** ajoute des boutons **⏮ / ⏭** (changement de piste) + le titre courant, en plus du mute ;
+la **boîte n'a aucun contrôle** (play/stop piloté par la platine DJ). Déposer une piste = 1 fichier dans
+`html/musics/` (préfixer `01-`, `02-`… pour l'ordre) + relancer `make resources`. ⚠️ Le loadscreen est
+**mis en cache** client → redémarrer complètement FiveM pour voir un changement de playlist.
+
+**Pack immobilier (esx_property) — déjà câblé, ne pas re-dériver :** esx_property stocke les biens
+achetables dans `data/resources/[esx_addons]/esx_property/properties.json`, **réécrit au runtime** par la
+ressource (achats). La fonction **`append_properties`** (`scripts/install-resources.sh`, idempotente,
+`python3` requis) **fusionne** une sélection de biens (villas/appartements/studios) dans ce fichier **sans
+l'écraser ni toucher l'état des propriétaires** : fusion **par `Name`** (bien présent = ignoré), `Wardrobe`
+cloné depuis un bien existant du même `Interior` (repli par défaut). Chaque `Interior` réutilise un
+intérieur **déjà défini** dans `Config.Interiors` (`apa_v_mp_h_01_a`/`mid-end`/`low-end`) → **aucun MLO ni
+override**. Ajouter un bien = 1 entrée dans `NEW_PROPS` (heredoc python). ⚠️ Coords d'entrée approximatives,
+à affiner en jeu.
 
 **Niveau de recherche (étoiles) — override es_extended :** ESX Legacy livre `Config.EnableWantedLevel =
 false` (`shared/config/adjustments.lua`), qui appelle `SetMaxWantedLevel(0)` au spawn → **aucune étoile**
@@ -279,6 +315,20 @@ dans le `block` de cette fonction (noms d'items = clés de `ox_inventory/data/we
   rechargement **auto** quand le chargeur se vide (sinon touche **R**, arme en main). Les armes achetées
   ont `durability = 100` (`Items.Metadata`) → rechargement jamais bloqué (`client.lua:561/853` gardent
   `durability > 0`).
+
+**Contenu otaku / anime (gratuit) — déjà câblé, ne pas re-dériver :** il **n'existe pas** de « pack
+otaku complet » gratuit clonable (tenues anime = payant Tebex ou leak interdit). Le dépôt intègre donc
+le **gratuit légitime** + un conteneur prêt à l'emploi :
+- **Arme** : `ThermalKatana` (katana add-on, mêlée à glow, `koolaash/ThermalKatana` pin `6bc38ed`) au
+  tableau `RESOURCES` + `ensure`. **`append_custom_weapons`** (`install-resources.sh`, idempotente,
+  marqueurs `UBUNTU-RP custom weapons` / `UBUNTU-RP katana`) **déclare** `WEAPON_THERMALKATANA` dans
+  `ox_inventory/data/weapons.lua` **et** la vend à l'armurerie civile (6000 $, mêlée libre). Ajouter une
+  arme custom = 1 ligne dans `weap_block` + 1 dans le shop. ⚠️ Licence amont non explicite (vérifier avant public).
+- **Vêtements** : `resources/[custom]/ubuntu-otaku/` = ressource **stream-only** (`fxmanifest` + `stream/` +
+  README), `ensure` dans le template, montée via le bind `[ubuntu]`. **Vide par défaut** (les `.ydd/.ytd`
+  sont des binaires à fournir) : déposer un pack **légit** (jamais de leak vag.gg/vfivem) dans `stream/`
+  (auto-streamé). Add-on clothing avec `.meta` → décommenter `files{}` + `data_file` du fxmanifest.
+  Vendable via `ubuntu-premium` (`type='cosmetic'`) ou directement au vestiaire d'apparence.
 
 **Pharmacie publique (ox_inventory)** : la seule pharmacie d'origine (`esx_ambulancejob`) et le shop
 `Medicine` d'ox_inventory sont **gatés job `ambulance`** → aucun civil ne peut se soigner. On AJOUTE

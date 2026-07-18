@@ -47,15 +47,19 @@
         <span>Serveur Roleplay • ESX</span>
     </footer>
 
-    <!-- Bouton mute musique -->
-    <button id="mute-btn" class="mute-btn" title="Couper / activer la musique" aria-label="Couper la musique">
-        <span id="mute-icon">🔊</span>
-    </button>
+    <!-- Contrôles musique : piste précédente / suivante + mute. Le titre de la
+         piste courante s'affiche brièvement au changement. -->
+    <div id="music-controls" class="music-controls">
+        <span id="track-name" class="track-name"></span>
+        <button id="prev-btn" class="music-btn" title="Piste précédente" aria-label="Piste précédente">⏮</button>
+        <button id="next-btn" class="music-btn" title="Piste suivante" aria-label="Piste suivante">⏭</button>
+        <button id="mute-btn" class="music-btn" title="Couper / activer la musique" aria-label="Couper la musique">
+            <span id="mute-icon">🔊</span>
+        </button>
+    </div>
 
-    <!-- Musique d'attente -->
-    <audio id="bgm" loop preload="auto">
-        <source src="assets/music.mp3" type="audio/mpeg">
-    </audio>
+    <!-- Musique d'attente (PLAYLIST musics/playlist.json, source pilotée par app.js) -->
+    <audio id="bgm" preload="auto"></audio>
 
     <script src="app.js"></script>
 </body>

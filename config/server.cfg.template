@@ -106,6 +106,11 @@ ensure PolyZone
 ensure interact-sound
 ensure rpemotes-reborn
 ensure LegacyFuel
+# Contenu otaku / anime : arme katana add-on (déclarée dans ox_inventory/weapons.lua,
+# vendue à l'armurerie) + conteneur de vêtements streamés (dépose tes .ydd/.ytd légit
+# dans resources/[custom]/ubuntu-otaku/stream/, cf. son README).
+ensure ThermalKatana
+ensure ubuntu-otaku
 # MLO intérieur d'hôpital Pillbox (map streamée) : remplace la coquille vanilla, les
 # coords ESX (esx_ambulancejob) restent valides. Chargé avant esx_ambulancejob.
 ensure PillboxHospital
@@ -131,6 +136,9 @@ ensure ubuntu-mairie
 # Braquages + trafic (utilisent ox_inventory ; alerte le job 'police' quand il existe).
 ensure ubuntu-braquages
 ensure ubuntu-drogue
+# Boite de nuit : entree (videur) + bar (boissons ox_inventory) + DJ/ambiance.
+# Interieur natif GTA (After Hours) via IPL — aucun MLO externe. Requiert ox_target.
+ensure ubuntu-boite
 
 # --- PHASE 2 (métier ESX POLICE) — monorepo esx-framework/ESX-Legacy-Addons -----
 # Installés sélectivement par install_esx_addons. Ordre : comptes/société AVANT les

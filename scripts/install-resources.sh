@@ -109,6 +109,12 @@ RESOURCES=(
     # z-phone : téléphone open-source ESX/ox (NUI pré-buildée, aucun build node).
     # Framework forcé en ESX par configure_zphone (défaut du dépôt = QBX).
     "[standalone]|z-phone|https://github.com/alfaben12/z-phone|v3.0.0"
+    # --- Contenu « otaku » / anime (gratuit) ----------------------------------
+    # Katana thermique add-on (arme de mêlée, glow anime) — ressource libre GitHub,
+    # compatible ox_inventory. Déclarée dans weapons.lua + vendue à l'armurerie par
+    # append_custom_weapons (ci-dessous). Crédit : bobodori (GTA5-mods). ⚠️ Licence
+    # non explicite côté amont : vérifier avant usage public (même statut que Pillbox).
+    "[standalone]|ThermalKatana|https://github.com/koolaash/ThermalKatana|6bc38edf127cb488324b39d4fd59c5f96f1a267b"
 )
 
 command -v git >/dev/null || die "git est requis"
@@ -506,6 +512,226 @@ append_pharmacy_shop() {
     fi
 }
 append_pharmacy_shop
+
+# --- 2c-quater. Armes custom (otaku) dans ox_inventory ------------------------
+# Les armes add-on streamées (ThermalKatana) doivent être DÉCLARÉES dans
+# ox_inventory/data/weapons.lua, sinon l'inventaire les ignore. On y AJOUTE nos
+# armes juste après le `return {` (sans remplacer le fichier) PUIS on les met en
+# vente à l'armurerie civile (shops.lua). Deux marqueurs distincts (weapons/shops)
+# → indépendant du marqueur 'UBUNTU-RP arsenal', se ré-applique sur un install
+# existant. Ajouter une arme custom = 1 ligne dans weap_block + 1 dans shop_line.
+append_custom_weapons() {
+    # (a) Déclaration dans weapons.lua ----------------------------------------
+    local wfile
+    wfile="$(find "${RES_DIR}" -path '*/ox_inventory/data/weapons.lua' -type f 2>/dev/null | head -n1)"
+    if [[ -z "${wfile}" ]]; then
+        log "ox_inventory/data/weapons.lua introuvable — armes custom non ajoutées"
+        return 0
+    fi
+    if grep -qF -- 'UBUNTU-RP custom weapons' "${wfile}"; then
+        log "  armes custom (katana) déjà déclarées — ignoré"
+    else
+        local weap_block
+        weap_block=$'\t-- UBUNTU-RP custom weapons (otaku)'
+        weap_block+=$'\n\t[\'WEAPON_THERMALKATANA\'] = { label = \'Katana thermique\', weight = 1000, durability = 0.0 },'
+        local wtmp
+        wtmp="$(mktemp)"
+        awk -v ins="${weap_block}" '!done && /return[ \t]*[{]/ { print; print ins; done=1; next } { print }' \
+            "${wfile}" > "${wtmp}" && mv "${wtmp}" "${wfile}"
+        if grep -qF -- 'UBUNTU-RP custom weapons' "${wfile}"; then
+            log "  arme custom déclarée dans weapons.lua (WEAPON_THERMALKATANA)"
+        else
+            rm -f "${wtmp}"
+            log "  AVERTISSEMENT : déclaration WEAPON_THERMALKATANA échouée (pas de 'return {')"
+        fi
+    fi
+    # (b) Mise en vente à l'armurerie (shops.lua) -----------------------------
+    local sfile
+    sfile="$(find "${RES_DIR}" -path '*/ox_inventory/data/shops.lua' -type f 2>/dev/null | head -n1)"
+    [[ -n "${sfile}" ]] || return 0
+    if grep -qF -- 'UBUNTU-RP katana' "${sfile}"; then
+        log "  katana déjà vendu à l'armurerie — ignoré"
+        return 0
+    fi
+    local stmp
+    stmp="$(mktemp)"
+    # Arme de mêlée → vendue librement (pas de license 'weapon'), comme la machette.
+    awk '
+        /Ammunation[ \t]*=[ \t]*\{/ { inammu=1 }
+        inammu && !done && /inventory[ \t]*=[ \t]*\{/ {
+            print
+            print "\t\t\t{ name = \x27WEAPON_THERMALKATANA\x27, price = 6000 }, -- UBUNTU-RP katana"
+            done=1; inammu=0; next
+        }
+        { print }
+    ' "${sfile}" > "${stmp}" && mv "${stmp}" "${sfile}"
+    if grep -qF -- 'UBUNTU-RP katana' "${sfile}"; then
+        log "  katana ajouté à l'armurerie (WEAPON_THERMALKATANA, 6000 $)"
+    else
+        rm -f "${stmp}"
+        log "  AVERTISSEMENT : ajout du katana à l'armurerie échoué (structure shops.lua modifiée ?)"
+    fi
+}
+append_custom_weapons
+
+# --- 2c-quinquies. Boissons de bar (ubuntu-boite) dans ox_inventory ------------
+# Le bar de la boite de nuit (ubuntu-boite) vend des boissons qui doivent EXISTER
+# dans ox_inventory/data/items.lua. On les AJOUTE juste après le `return {` (sans
+# remplacer le fichier). Consommables (soif + un peu de stress en moins). Idempotent
+# via marqueur commentaire. Ajouter une boisson = 1 ligne ici + 1 dans Config.Bar.drinks.
+append_club_items() {
+    local file
+    file="$(find "${RES_DIR}" -path '*/ox_inventory/data/items.lua' -type f 2>/dev/null | head -n1)"
+    if [[ -z "${file}" ]]; then
+        log "ox_inventory/data/items.lua introuvable — boissons de bar non ajoutées"
+        return 0
+    fi
+    if grep -qF -- 'UBUNTU-RP club items' "${file}"; then
+        log "  boissons de bar déjà présentes — ignoré"
+        return 0
+    fi
+    local block
+    block=$'\t-- UBUNTU-RP club items (ubuntu-boite — bar de la boite de nuit)\n\t[\'biere\'] = { label = \'Biere\', weight = 350, stack = true, close = true, consume = 1, client = { status = { thirst = 120000, stress = -30000 }, usetime = 2000 } },\n\t[\'cocktail\'] = { label = \'Cocktail\', weight = 350, stack = true, close = true, consume = 1, client = { status = { thirst = 140000, stress = -50000 }, usetime = 2500 } },\n\t[\'shooter\'] = { label = \'Shooter\', weight = 120, stack = true, close = true, consume = 1, client = { status = { thirst = 60000, stress = -20000 }, usetime = 1500 } },\n\t[\'champagne\'] = { label = \'Champagne\', weight = 900, stack = true, close = true, consume = 1, client = { status = { thirst = 160000, stress = -70000 }, usetime = 3000 } },'
+    local tmp
+    tmp="$(mktemp)"
+    awk -v ins="${block}" '!done && /return[ \t]*[{]/ { print; print ins; done=1; next } { print }' \
+        "${file}" > "${tmp}" && mv "${tmp}" "${file}"
+    if grep -qF -- 'UBUNTU-RP club items' "${file}"; then
+        log "  boissons de bar ajoutées (biere, cocktail, shooter, champagne)"
+    else
+        rm -f "${tmp}"
+        log "  AVERTISSEMENT : insertion boissons de bar échouée (pas de 'return {') — à ajouter à la main"
+    fi
+}
+append_club_items
+
+# --- 2c-sexies. Pack immobilier : maisons achetables (esx_property) ------------
+# esx_property stocke les biens achetables dans data/resources/[esx_addons]/
+# esx_property/properties.json (fichier réécrit AU RUNTIME par la ressource :
+# SaveResourceFile lors des achats). On y AJOUTE une sélection de biens (villas /
+# penthouses / appartements) SANS écraser le fichier ni l'état des propriétaires :
+# fusion idempotente par `Name` (un bien déjà présent est ignoré). L'`Interior` de
+# chaque bien réutilise un intérieur DÉJÀ défini dans esx_property/config.lua
+# (Config.Interiors) → aucun MLO/override. Ajouter un bien = 1 entrée dans NEW_PROPS.
+# Nécessite python3 (déjà utilisé pour les assets) ; non-fatal s'il manque.
+append_properties() {
+    local file
+    file="$(find "${RES_DIR}" -path '*/esx_property/properties.json' -type f 2>/dev/null | head -n1)"
+    if [[ -z "${file}" ]]; then
+        log "esx_property/properties.json introuvable — pack immobilier non ajouté"
+        return 0
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        log "  AVERTISSEMENT : python3 absent — pack immobilier non ajouté (fusion JSON impossible)"
+        return 0
+    fi
+    python3 - "${file}" <<'PY'
+import json, sys
+
+path = sys.argv[1]
+
+# Biens à ajouter. `Interior` DOIT correspondre à un `value` de Config.Interiors
+# (esx_property/config.lua). Coords d'entrée approximatives → à affiner en jeu.
+NEW_PROPS = [
+    {"Name": "Villa Vinewood Hills",   "Price": 550000, "Interior": "apa_v_mp_h_01_a",
+     "Entrance": {"x": -174.94, "y": 502.56, "z": 137.42}},
+    {"Name": "Penthouse Eclipse Towers","Price": 480000, "Interior": "apa_v_mp_h_02_a",
+     "Entrance": {"x": -773.54, "y": 312.60, "z": 85.70}},
+    {"Name": "Appartement Del Perro",  "Price": 165000, "Interior": "mid-end",
+     "Entrance": {"x": -1447.06, "y": -538.83, "z": 34.74}},
+    {"Name": "Appartement Vespucci",   "Price": 135000, "Interior": "mid-end",
+     "Entrance": {"x": -1288.90, "y": -1116.80, "z": 6.70}},
+    {"Name": "Studio Mirror Park",     "Price": 68000,  "Interior": "low-end",
+     "Entrance": {"x": 1216.50, "y": -659.40, "z": 64.00}},
+    {"Name": "Studio Sandy Shores",    "Price": 52000,  "Interior": "low-end",
+     "Entrance": {"x": 1972.90, "y": 3815.50, "z": 32.40}},
+]
+
+DEFAULT_WARDROBE = {"x": 259.99, "y": -1003.46, "z": -99.01}
+
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        props = json.load(f)
+    if not isinstance(props, list):
+        raise ValueError("properties.json n'est pas un tableau JSON")
+except Exception as e:
+    print("  AVERTISSEMENT : lecture properties.json impossible (%s) — pack immobilier non ajouté" % e)
+    sys.exit(0)
+
+existing_names = {p.get("Name") for p in props if isinstance(p, dict)}
+
+# Récupère un Wardrobe existant par Interior (pour rester cohérent avec l'intérieur).
+wardrobe_by_interior = {}
+for p in props:
+    if isinstance(p, dict):
+        interior = p.get("Interior")
+        pos = (p.get("positions") or {}).get("Wardrobe")
+        if interior and pos and interior not in wardrobe_by_interior:
+            wardrobe_by_interior[interior] = pos
+
+added = 0
+for np in NEW_PROPS:
+    if np["Name"] in existing_names:
+        continue
+    wardrobe = wardrobe_by_interior.get(np["Interior"], DEFAULT_WARDROBE)
+    props.append({
+        "Name": np["Name"],
+        "Price": np["Price"],
+        "Interior": np["Interior"],
+        "Entrance": np["Entrance"],
+        "positions": {"Wardrobe": wardrobe},
+        "Owner": "", "OwnerName": "", "Owned": False, "Locked": False,
+        "garage": {"StoredVehicles": [], "enabled": False},
+        "furniture": [], "Keys": [], "plysinside": [], "setName": "",
+        "cctv": {"enabled": False},
+    })
+    added += 1
+
+if added > 0:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(props, f, ensure_ascii=False, indent=2)
+    print("  pack immobilier : %d bien(s) ajouté(s) à esx_property" % added)
+else:
+    print("  pack immobilier déjà présent — ignoré")
+PY
+}
+append_properties
+
+# --- 2c-septies. Playlists musicales (ubuntu-boite / ubuntu-loadscreen) --------
+# FiveM ne sait pas lister un dossier au runtime (ni en Lua, ni en NUI). On SCANNE
+# donc ici, à l'installation, chaque dossier `html/musics/` et on génère un
+# `playlist.json` (tableau JSON des noms de fichiers audio, trié = ordre de lecture).
+# La NUI lit ce fichier et joue les pistes dans l'ordre, en boucle. Régénéré à chaque
+# `make resources` (idempotent). Déposer une piste = 1 fichier .mp3/.ogg/.wav dans le
+# dossier + relancer `make resources`. N'exige PAS python3 (JSON écrit en bash).
+generate_music_playlists() {
+    local dirs=(
+        "resources/[custom]/ubuntu-boite/html/musics"
+        "resources/[custom]/ubuntu-loadscreen/html/musics"
+    )
+    local dir out first base
+    for dir in "${dirs[@]}"; do
+        mkdir -p "${dir}"
+        out="${dir}/playlist.json"
+        first=1
+        {
+            printf '['
+            while IFS= read -r f; do
+                base="$(basename "${f}")"
+                base="${base//\\/\\\\}"   # échappe le backslash
+                base="${base//\"/\\\"}"   # échappe le guillemet
+                if [[ "${first}" -eq 1 ]]; then first=0; else printf ','; fi
+                printf '\n  "%s"' "${base}"
+            done < <(find "${dir}" -maxdepth 1 -type f \
+                        \( -iname '*.mp3' -o -iname '*.ogg' -o -iname '*.wav' \) | sort)
+            printf '\n]\n'
+        } > "${out}"
+        local n
+        n="$(find "${dir}" -maxdepth 1 -type f \( -iname '*.mp3' -o -iname '*.ogg' -o -iname '*.wav' \) | wc -l | tr -d ' ')"
+        log "  playlist ${dir##*/} (${dir%/html/musics}) : ${n} piste(s) → playlist.json"
+    done
+}
+generate_music_playlists
 
 # --- 2d. z-phone : sélection du framework ESX (défaut du dépôt = QBX) ----------
 # Le téléphone lit Config.Core dans config/config.lua ; on force "ESX" (idempotent).

@@ -7,6 +7,81 @@ un versionnage sémantique souple : `MAJEUR.MINEUR.CORRECTIF`.
 
 ---
 
+## [2.12.1] — 2026-07-18 — Playlists musicales (boîte de nuit + écran de chargement)
+
+- **Dossier `html/musics/` scanné automatiquement** dans `ubuntu-boite` **et** `ubuntu-loadscreen` :
+  dépose autant de pistes (`.mp3`/`.ogg`/`.wav`) que voulu, elles sont jouées **dans l'ordre** (tri par
+  nom de fichier — préfixe `01-`, `02-`…) puis la playlist **boucle**.
+- **Scan à l'installation** (FiveM ne peut pas lister un dossier au runtime) : nouvelle fonction
+  **`generate_music_playlists`** (`scripts/install-resources.sh`, pure bash, idempotente, rejouée à chaque
+  `make resources`) écrit un **`playlist.json`** (tableau JSON trié) dans chaque dossier `musics/`. Le
+  fxmanifest sert `html/musics/**` (glob). La NUI `fetch('musics/playlist.json')` et enchaîne les pistes
+  (passe à la suivante sur `ended`, saute une piste illisible) — **dégradation silencieuse** si vide.
+- **Changement de piste — loadscreen uniquement** : boutons **⏮ / ⏭** + titre de la piste courante
+  ajoutés à l'écran de chargement (en plus du bouton mute). La **boîte de nuit n'a aucun contrôle de
+  piste** (lecture/arrêt pilotés par la platine DJ, playlist en boucle).
+- Les 2 musiques existantes du loadscreen (`assets/music.mp3`, `assets/music2.mp3`) ont été **déplacées**
+  dans `html/musics/` (`01-music.mp3`, `02-music.mp3`) → playlist par défaut fonctionnelle.
+- ⚠️ Le loadscreen est **mis en cache** côté client : **redémarrer complètement FiveM** pour prendre en
+  compte une nouvelle playlist.
+- Fichiers : `scripts/install-resources.sh`, `resources/[custom]/ubuntu-boite/{fxmanifest.lua,html/*}`,
+  `resources/[custom]/ubuntu-loadscreen/{fxmanifest.lua,html/*}`, `CLAUDE.md`.
+
+## [2.12.0] — 2026-07-18 — Boîte de nuit (intérieur natif) + pack immobilier
+
+- **Nouvelle ressource maison `resources/[custom]/ubuntu-boite/`** — **boîte de nuit** ESX/ox,
+  **100 % serveur-authoritative** (le client n'envoie qu'une intention ; le serveur revalide tout).
+  - **Intérieur INCLUS sans MLO externe** : réutilise la **discothèque native de GTA V** (DLC
+    *After Hours*), toujours présente dans la map — aucun clone, aucune licence tierce à vérifier.
+    L'entrée extérieure **téléporte** vers les coords fixes de l'intérieur (chargé + habillé via
+    `LoadInterior`/`ActivateInteriorEntitySet`), une sortie `[E]` renvoie dehors. Fondu anti-flash.
+  - **Entrée** : PNJ videur + blip + marqueur `[E]` (PNJ calé au sol par le helper partagé
+    `groundSnap`) ; **cover charge** optionnel (`Config.Entry.fee`, prélevé/validé côté serveur).
+  - **Bar** : zone **ox_target** → menu `lib.registerContext` de boissons. Achat serveur-authoritative
+    (vérifie le cash + la place d'inventaire **avant** de débiter → aucune perte d'argent), item ajouté
+    via **ox_inventory**. Boissons `bière`/`cocktail`/`shooter`/`champagne` injectées dans
+    `ox_inventory/data/items.lua` par **`append_club_items`** (nouvelle fonction idempotente de
+    `scripts/install-resources.sh`, marqueur `UBUNTU-RP club items`).
+  - **DJ / ambiance** : zone **ox_target** → bascule une **`GlobalState.boiteMusic`** (statebag répliqué)
+    → **NUI audio auto-contenue** (comme `ubuntu-loadscreen`) qui joue `html/assets/music.mp3` en boucle
+    pour tous les joueurs présents dans l'intérieur. **Placeholder vide** livré (0 octet) — dégradation
+    silencieuse si absent ; l'opérateur dépose sa piste (cf. `html/assets/README.md`).
+  - **Société** optionnelle (`Config.Society`, **désactivée par défaut**) : reverse le revenu des
+    boissons/entrées à `society_boite` (esx_addonaccount) au lieu d'un simple puits d'argent.
+  - Locales fr/en + shim `locales/locale.lua`. `ensure ubuntu-boite` après `ubuntu-drogue` dans le
+    template (requiert es_extended/ox_lib/ox_target/ox_inventory, tous chargés avant).
+- **Pack immobilier (esx_property)** — nouvelle fonction **`append_properties`**
+  (`scripts/install-resources.sh`, idempotente, nécessite `python3`) qui **fusionne** une sélection de
+  biens achetables (villas Vinewood/Eclipse, appartements Del Perro/Vespucci, studios Mirror Park/Sandy)
+  dans `esx_property/properties.json` **sans écraser le fichier ni l'état des propriétaires** : fusion
+  **par `Name`** (bien déjà présent = ignoré), `Wardrobe` cloné depuis un bien existant du même `Interior`
+  (repli par défaut). Chaque `Interior` réutilise un intérieur **déjà défini** dans `Config.Interiors`
+  (`apa_v_mp_h_01_a`/`mid-end`/`low-end`) → **aucun MLO/override**. Ajouter un bien = 1 entrée `NEW_PROPS`.
+  ⚠️ Coords d'entrée approximatives, à affiner en jeu.
+- Fichiers : `resources/[custom]/ubuntu-boite/*`, `scripts/install-resources.sh`,
+  `config/server.cfg.template`, `CLAUDE.md`.
+
+## [2.11.0] — 2026-07-16 — Contenu otaku / anime : katana add-on + conteneur de vêtements
+
+- **Arme katana thermique (`ThermalKatana`)** — ressource **gratuite** GitHub
+  (`koolaash/ThermalKatana`, pin `6bc38ed`), arme de mêlée add-on à glow anime, compatible
+  ox_inventory. Ajoutée au tableau `RESOURCES` (clone épinglé) et `ensure` dans le template.
+  Une nouvelle fonction **`append_custom_weapons`** (`scripts/install-resources.sh`, idempotente,
+  marqueurs `UBUNTU-RP custom weapons` / `UBUNTU-RP katana`) **déclare** `WEAPON_THERMALKATANA`
+  dans `ox_inventory/data/weapons.lua` **et** la met en vente à l'armurerie civile (6000 $, mêlée
+  libre, sans permis). ⚠️ Licence amont non explicite (même statut que Pillbox) — à vérifier avant
+  usage public. Ajouter une arme custom = 1 ligne dans chacun des deux blocs.
+- **Conteneur de vêtements `resources/[custom]/ubuntu-otaku/`** — ressource **stream-only**
+  (`fxmanifest` + `stream/` + `README`), `ensure` dans le template. Prête à recevoir des packs de
+  vêtements/coiffures/accessoires **otaku légitimes** : déposer les `.ydd/.ytd/.ymt/.meta` dans
+  `stream/` (auto-streamés). Add-on clothing avec `.meta` → décommenter `files{}` + `data_file`.
+  Vendables via `ubuntu-premium` (`type='cosmetic'`) ou directement au vestiaire d'apparence.
+- ⚠️ **Pas de « pack otaku complet » gratuit clonable** : les tenues anime « complètes » sont
+  payantes (Tebex) ou en leak (interdit). Le dépôt fournit donc l'**arme gratuite intégrée** + le
+  **conteneur prêt à l'emploi** ; l'opérateur y dépose ses assets vêtements légitimes.
+- Fichiers : `scripts/install-resources.sh`, `config/server.cfg.template`,
+  `resources/[custom]/ubuntu-otaku/{fxmanifest.lua,README.md,stream/.gitkeep}`.
+
 ## [2.10.0] — 2026-07-16 — Panel admin : bascule PNJ piétons / trafic (vider les rues)
 
 - **Nouveau réglage de monde dans `/admin` (onglet Serveur)** : deux boutons staff pour

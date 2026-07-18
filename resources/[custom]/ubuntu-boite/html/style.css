@@ -1,0 +1,9 @@
+/* NUI invisible (aucun affichage) : la boite n'a pas de HUD, seulement l'audio. */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    background: transparent;
+}

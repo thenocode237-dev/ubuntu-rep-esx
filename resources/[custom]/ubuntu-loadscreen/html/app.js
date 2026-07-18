@@ -16,6 +16,10 @@
     const bgm       = document.getElementById('bgm');
     const muteBtn   = document.getElementById('mute-btn');
     const muteIcon  = document.getElementById('mute-icon');
+    const prevBtn   = document.getElementById('prev-btn');
+    const nextBtn   = document.getElementById('next-btn');
+    const trackName = document.getElementById('track-name');
+    const controls  = document.getElementById('music-controls');
 
     // --- Astuces RP (génériques) -------------------------------------------
     const TIPS = [
@@ -93,10 +97,16 @@
         }, 400);
     }, 6000);
 
-    // --- Musique d'attente --------------------------------------------------
+    // --- Musique d'attente (PLAYLIST) --------------------------------------
+    // Scanne musics/playlist.json (généré à l'install), joue les pistes DANS
+    // L'ORDRE, en boucle. Le joueur peut changer de piste (⏮ / ⏭) et couper le son.
     const MUTE_KEY = 'ubuntu_loadscreen_muted';
     let muted = false;
     try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (_) {}
+
+    let tracks = [];   // ['musics/01.mp3', ...]
+    let index = 0;
+    let started = false;
 
     function applyMute() {
         bgm.muted = muted;
@@ -105,10 +115,26 @@
         muteBtn.setAttribute('aria-label', muted ? 'Activer la musique' : 'Couper la musique');
     }
 
-    function tryPlay() {
-        if (!bgm) return;
-        bgm.volume = 0.45;
-        applyMute();
+    // Affiche brièvement le nom de la piste (sans extension ni préfixe d'ordre).
+    let nameTimer = null;
+    function showTrackName() {
+        if (!trackName || !tracks.length) return;
+        let raw = decodeURIComponent(tracks[index].replace(/^musics\//, ''));
+        raw = raw.replace(/\.[^.]+$/, '').replace(/^\d+\s*[-_.]\s*/, '');
+        trackName.textContent = raw;
+        trackName.classList.add('show');
+        if (nameTimer) clearTimeout(nameTimer);
+        nameTimer = setTimeout(function () { trackName.classList.remove('show'); }, 3500);
+    }
+
+    function load(i) {
+        if (!tracks.length) return;
+        index = ((i % tracks.length) + tracks.length) % tracks.length;
+        bgm.src = tracks[index];
+        showTrackName();
+    }
+
+    function play() {
         const p = bgm.play();
         if (p && typeof p.catch === 'function') {
             // Certains contextes exigent une interaction : on réessaie au 1er clic/touche.
@@ -124,17 +150,51 @@
         }
     }
 
-    if (bgm) {
-        // Si le fichier est absent/illisible, on masque juste le bouton — pas d'erreur.
-        bgm.addEventListener('error', function () {
-            muteBtn.style.display = 'none';
-        });
-        muteBtn.addEventListener('click', function () {
-            muted = !muted;
-            try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch (_) {}
-            applyMute();
-            if (!muted) bgm.play().catch(function () {});
-        });
-        tryPlay();
+    function start() {
+        if (!tracks.length) { if (controls) controls.style.display = 'none'; return; }
+        started = true;
+        bgm.volume = 0.45;
+        applyMute();
+        if (!bgm.src) load(0);
+        play();
     }
+
+    function change(delta) {
+        if (!tracks.length) return;
+        load(index + delta);
+        if (!muted) play();
+    }
+
+    // Enchaîne la piste suivante en fin de lecture (boucle sur la playlist).
+    bgm.addEventListener('ended', function () {
+        if (!tracks.length) return;
+        load(index + 1);
+        play();
+    });
+    // Piste illisible → on saute à la suivante (ne bloque jamais le loadscreen).
+    bgm.addEventListener('error', function () {
+        if (!started || tracks.length <= 1) return;
+        load(index + 1);
+        play();
+    });
+
+    muteBtn.addEventListener('click', function () {
+        muted = !muted;
+        try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch (_) {}
+        applyMute();
+        if (!muted) play();
+    });
+    prevBtn.addEventListener('click', function () { change(-1); });
+    nextBtn.addEventListener('click', function () { change(1); });
+
+    // Charge la playlist puis démarre.
+    fetch('musics/playlist.json')
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (list) {
+            if (Array.isArray(list)) {
+                tracks = list.map(function (name) { return 'musics/' + name; });
+            }
+            start();
+        })
+        .catch(function () { if (controls) controls.style.display = 'none'; });
 })();
